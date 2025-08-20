@@ -93,6 +93,19 @@ jobs:
           echo "Last updated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./LAST_SYNC.md
           echo "Total workflow files: $(find ./examples -name "*.json" | wc -l)" >> ./LAST_SYNC.md
 
+      # 6b. Санитизация потенциальных секретов в примерах (во избежание блокировки Push Protection)
+      - name: Sanitize examples (remove tokens)
+        run: |
+          set -e
+          if [ -d "./examples" ]; then
+            files=$(grep -RIl 'apify_api_' ./examples || true)
+            if [ -n "$files" ]; then
+              echo "Sanitizing Apify tokens in examples:"
+              echo "$files"
+              echo "$files" | xargs -r sed -i -E 's/apify_api_[A-Za-z0-9]+/<REDACTED_APIFY_TOKEN>/g'
+            fi
+          fi
+
       # 7. Создаем Pull Request с изменениями
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
