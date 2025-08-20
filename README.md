@@ -257,13 +257,14 @@
 
 ### 22. Автосинхронизация базы знаний (GitHub Actions)
 
-- В репозитории настроен workflow `.github/workflows/sync-knowledge-base.yml`.
-- Расписание: ежедневно в 02:00 UTC; доступен ручной запуск (Run workflow).
+- Workflow: `.github/workflows/sync-knowledge-base.yml`.
+- Расписание: ежедневно в 02:00 UTC; ручной запуск доступен.
 - Источники: `n8n-io/n8n-docs`, `Zie619/n8n-workflows`, `wassupjay/n8n-free-templates`, `Synaptiv-AI/awesome-n8n`, `ProfSynapse/n8n-automations`.
 - Заполняемые директории:
   - `./docs` — официальная документация n8n
-  - `./examples` — примеры workflow, используемые агентами как референсы
-  - `./llm-docs` — дополнительные LLM-ориентированные материалы
-- Метаданные синка: `LAST_SYNC.md` (дата и количество файлов).
-- Права: workflow запрашивает `permissions: contents: write` для пуша изменений.
-- Чтобы изменить источники/расписание — правь файл workflow.
+  - `./examples` — примеры workflow
+  - `./llm-docs` — LLM-ориентированные материалы
+- Метаданные: `LAST_SYNC.md` (дата и количество файлов).
+- Результат: создается Pull Request с веткой `chore/auto-sync-knowledge-base` (автоматическое закрытие/пересоздание при новых запусках).
+- Права: `contents: write`, `pull-requests: write`.
+- Изменить источники/расписание можно редактированием файла workflow.

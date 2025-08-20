@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: sync-knowledge-base
@@ -92,14 +93,17 @@ jobs:
           echo "Last updated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./LAST_SYNC.md
           echo "Total workflow files: $(find ./examples -name "*.json" | wc -l)" >> ./LAST_SYNC.md
 
-      # 7. Коммитим изменения
-      - name: Commit and Push Changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          if ! git diff --staged --quiet; then
-            git commit -m "🤖 Auto-sync: n8n knowledge base updated $(date +'%Y-%m-%d %H:%M')"
-            git push
-          else
-            echo "No changes to commit."
+      # 7. Создаем Pull Request с изменениями
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "🤖 Auto-sync: n8n knowledge base updates"
+          branch: chore/auto-sync-knowledge-base
+          title: "🤖 Auto-sync: n8n knowledge base updates"
+          body: |
+            This PR updates docs/examples from upstream sources.
+            - See LAST_SYNC.md for details.
+            - Sources: n8n-io/n8n-docs, Zie619/n8n-workflows, wassupjay/n8n-free-templates, Synaptiv-AI/awesome-n8n, ProfSynapse/n8n-automations.
+          labels: automated, sync
+          delete-branch: true
