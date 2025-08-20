@@ -1,45 +1,43 @@
-# Dark Project Arena — B2B Outreach Automation (n8n)
+# Dark Project Arena — спецификация для агента n8n (B2B Outreach)
 
-## Overview
-- Goal: Автоматизировать сбор контактов компьютерных клубов (Яндекс Карты, 2ГИС), обогащение, внесение в Bitrix24, прогрев и сделки, плюс постпродажа.
-- Scope (входит): сбор, нормализация, дедупликация, обогащение (site/email/Telegram/владелец), апсерт в CRM, мультиканальные касания (Telegram/email), RAG-бот-РОП, логистика, постпродажа.
-- Out of scope (пока): несанкционированный скрапинг в обход ToS, MTProto без отдельного сервиса и оповещенных рисков, полноценная CDP/BI.
-- Owner: <заполнить>
+Этот документ — бриф для следующего агента, который должен сгенерировать готовые к импорту workflow n8n для автоматизации сбора и прогрева компьютерных клубов (Dark Project, серия Arena).
 
-## Topology (Workflows)
-Храним JSON workflow в `./workflows` по шаблону `YYYYMMDD_<slug>_vNNN.json`.
+## Инструкции для агента n8n
+- Вывод: строго один валидный JSON на workflow, без текста до/после.
+- Путь/имя файла: `./projects/dark-project-arena-outreach/workflows/YYYYMMDD_<workflow-slug>_vNNN.json`.
+- Версия: `version: 2` (если в `/docs` не указано иное).
+- Ноды: использовать только документированные в `/docs`. Указывать корректные `typeVersion`.
+- Именование нод: кратко по-английски (например: `Fetch Yandex`, `Fetch 2GIS`, `Normalize`, `Upsert Company`), соответствовать назначению.
+- Активность: `active: false` по умолчанию. `settings/meta` — заполнить по необходимости.
+- Проверка: сверить с `/examples`, пройти чек-лист ниже.
 
-- wf-01-orchestrator — оркестратор расписаний/запусков
-- wf-02-seed-regions — регионы и поисковые запросы
-- wf-03-fetch-yandex-maps — сбор из Яндекс Карт (официальные API)
+## Что нужно сгенерировать (deliverables)
+- wf-01-orchestrator — оркестратор запусков и расписаний
+- wf-02-seed-regions — генерация регионов и поисковых запросов
+- wf-03-fetch-yandex-maps — сбор из Яндекс.Карт (официальные API)
 - wf-04-fetch-2gis — сбор из 2ГИС (официальные API)
-- wf-05-normalize-dedupe — нормализация и дедупликация
-- wf-06-enrich-contacts — обогащение: сайт, email, Telegram, владелец/управляющий
-- wf-07-crm-upsert-bitrix24 — апсерт в Bitrix24 (Company/Contact/Lead/Deal)
-- wf-08-outreach-orchestrator — сценарии касаний (LLM, A/B)
-- wf-09-outreach-delivery — доставка сообщений (Telegram бот или userbot; Email)
-- wf-10-conversation-loop — ответы/возражения, обновление CRM, эскалация
-- wf-11-logistics-quote — расчёт сроков/логистики (таблица/API)
-- wf-12-handoff-to-supplier — передача горячих лидов поставщику
-- wf-13-post-sale-followups — D0/7/30/90/180 касания
-- wf-14-analytics-reporting — отчётность и оповещения
+- wf-05-normalize-dedupe — нормализация/сшивка/дедупликация
+- wf-06-enrich-contacts — парсинг сайта/почты/Telegram, поиск владельца/управляющего
+- wf-07-crm-upsert-bitrix24 — апсерт Company/Contact + Lead/Deal
+- wf-08-outreach-orchestrator — сценарии касаний (LLM + KB)
+- wf-09-outreach-delivery — отправка (Telegram бот или userbot; Email)
+- wf-10-conversation-loop — обработка входящих, ответы, возражения, обновление CRM
+- wf-11-logistics-quote — оценка логистики/сроков
+- wf-12-handoff-to-supplier — передача «горячих» лидов поставщику
+- wf-13-post-sale-followups — касания 0/7/30/90/180
+- wf-14-analytics-reporting — отчётность/оповещения
 
-## How to build it in n8n (пошагово)
-1) Создай проектные креды: Yandex Maps, 2ГИС, Bitrix24, Email, Telegram Bot (и/или URL userbot-сервиса), LLM провайдер.
-2) Сконфигурируй wf-02: массив регионов и поисковых запросов.
-3) Реализуй wf-03 и wf-04: запросы к API, извлечение полей (id, name, address, phones, site), пагинация, лимиты.
-4) Собери wf-05: объединение потоков, нормализация, дедупликация.
-5) В wf-06 добавь обогащение: парсинг сайта (email/телефон/telegram), поиск в tg-чатах (через userbot API), владельца/управляющего.
-6) Подключи wf-07: апсерт в Bitrix24 (Company/Contact → Lead/Deal) с проверкой дублей.
-7) Настрой wf-08/09: генерация персонализированных сообщений (LLM+KB) и их отправка через Telegram (бот или userbot) и/или Email.
-8) Включи wf-10: входящие ответы (webhook), классификация (вопрос/возражение/КП), автоответы/эскалация, обновление стадий в CRM.
-9) Добавь wf-11: расчёт логистики и сроков (из таблицы/JSON или API), запись в CRM и отправка клиенту.
-10) Настрой wf-12: критерий «горячий» → уведомления и передача поставщику.
-11) Реализуй wf-13: постпродажные касания (0/7/30/90/180), NPS/отзывы/ролики, upsell.
-12) Подними wf-14: отчётность, дашборд/шиты, еженедельные рассылки.
+## Credentials и плейсхолдеры (используй в credentials)
+- Yandex Maps API: `<YANDEX_API_KEY>`
+- 2GIS API: `<TWO_GIS_API_KEY>`
+- Bitrix24: `<BITRIX24_BASE_URL>`, `<BITRIX24_WEBHOOK>` ИЛИ OAuth2 cred по `/docs`
+- Telegram Bot: `<TELEGRAM_BOT_TOKEN>`
+- Userbot-сервис (если используется): `<USERBOT_BASE_URL>` (эндпоинты ниже)
+- Email (SMTP/ESP): `<SMTP_HOST>`, `<SMTP_USER>`, `<SMTP_PASS>` …
+- LLM провайдер: `<LLM_API_KEY>`
 
-## Data Contracts
-CompanyRecord (единый агрегат для CRM):
+## Контракты данных (используй как ориентир входов/выходов)
+CompanyRecord:
 ```json
 {
   "$id": "company-record.v1",
@@ -86,7 +84,7 @@ CompanyRecord (единый агрегат для CRM):
 }
 ```
 
-OutreachMessage (единица касания):
+OutreachMessage:
 ```json
 {
   "$id": "outreach-message.v1",
@@ -101,7 +99,7 @@ OutreachMessage (единица касания):
 }
 ```
 
-FollowupPlan (постпродажные касания):
+FollowupPlan:
 ```json
 {
   "$id": "followup-plan.v1",
@@ -123,88 +121,76 @@ FollowupPlan (постпродажные касания):
 }
 ```
 
-## Knowledge Base (RAG)
-Что положить сразу:
-- Product Specs: технические характеристики по моделям Arena (JSON/Markdown/PDF-ссылки)
-- Commercial: прайсы, скидки/объёмы, MOQ, гарантия, логистика, условия поставки
-- FAQ/Q&A: типовые вопросы/ответы, SLA, сервис
-- Objections: список возражений → короткие/длинные отработки
-- Competitor Matrix: сравнение (цена, сенсор/скорость, ресурс, ПО, вес/эргономика, гарантия, доступность, кастомизация) с выделением преимуществ Dark Project
-- Sales Playbook: сценарии, скрипты, A/B шаблоны сообщений
-- Persona Prompt (РОП 20+ лет): системный промпт для LLM
+## Bitrix24 — маппинг полей (минимум)
+- Company: TITLE, ADDRESS, ADDRESS_CITY, ADDRESS_REGION, WEB, PHONE[], EMAIL[]
+- Contact: NAME, LAST_NAME, POST, PHONE[], EMAIL[], IM (TELEGRAM)
+- Lead/Deal: TITLE, COMPANY_ID, CONTACT_ID, COMMENTS, CATEGORY/STAGE
+- Поиск дублей: `crm.duplicate.findbycomm` (PHONE/EMAIL/WEB) → `update` вместо `add`.
 
-Черновик системного промпта РОПа:
-```
-Ты — РОП с 20+ годами опыта в продажах компьютерной периферии. Тон — экспертный и доброжелательный. Знаешь линейку Dark Project (серия Arena), конкурентов и типовые возражения. Всегда опираешься на факты из базы знаний и цитируешь источники. Ведёшь клиента от первого касания до сделки в соответствии с логикой CRM. Соблюдаешь закон и этику (opt-in; отказ — уважаешь). Если не уверен — задаёшь уточняющие вопросы и эскалируешь менеджеру.
-```
+## Telegram — варианты доставки
+- Бот: ноды Telegram в n8n (sendMessage/sendDocument) — просто, но ограничения инициирования диалога.
+- Userbot: внешний сервис (MTProto). HTTP:
+  - POST `<USERBOT_BASE_URL>/sendMessage` {username|chatId, text, threadKey?}
+  - POST `<USERBOT_BASE_URL>/sendDocument` {username|chatId, fileUrl}
+  - Webhook входящих: `<N8N_BASE_URL>/webhook/telegram/inbox` → wf-10
 
-Книги для «личности» и техник:
-- Neil Rackham — SPIN Selling
-- Matthew Dixon, Brent Adamson — The Challenger Sale
-- Jeb Blount — Fanatical Prospecting
-- Chris Voss — Never Split the Difference
-- Daniel Pink — To Sell Is Human
-- Robert Cialdini — Influence
-- Mike Weinberg — New Sales. Simplified.
+## Входы/выходы и критерии по workflow (сжато)
+- wf-02-seed-regions
+  - Input: none. Output: [{region, city, queries[]}]
+- wf-03-fetch-yandex-maps / wf-04-fetch-2gis
+  - Input: из wf-02. Output: массив сырых объектов источника (id, name, address, phones, site, coords).
+  - Ограничения: rate limit, пагинация; `continueOnFail` на единичных сбоях.
+- wf-05-normalize-dedupe
+  - Input: потоки из 03/04. Output: массив `CompanyRecord` (нормализовано и дедуплицировано).
+- wf-06-enrich-contacts
+  - Input: CompanyRecord[]. Output: CompanyRecord[] c email/telegram/ownerOrManager при наличии.
+- wf-07-crm-upsert-bitrix24
+  - Input: CompanyRecord. Output: IDs созданных/обновлённых Company/Contact/Lead|Deal. Учитывать дубликаты.
+- wf-08-outreach-orchestrator
+  - Input: CompanyRecord + KB. Output: `OutreachMessage[]` по каналам, расписание.
+- wf-09-outreach-delivery
+  - Input: OutreachMessage. Output: статус доставки/идентификатор треда.
+- wf-10-conversation-loop
+  - Input: входящие (Telegram/Email). Output: классификация, ответ/эскалация, обновление CRM.
+- wf-11-logistics-quote
+  - Input: запрос клиента/карточка. Output: расчёт ETA/стоимости, запись в CRM.
+- wf-12-handoff-to-supplier
+  - Input: «горячий» лид. Output: уведомление поставщику, задание/сделка.
+- wf-13-post-sale-followups
+  - Input: событие «сделка успешно». Output: касания D0/7/30/90/180, сбор отзывов/NPS.
+- wf-14-analytics-reporting
+  - Input: CRM/логи. Output: отчёты (Sheets/Notion/Email/TG).
 
-## Bitrix24 — интеграция и маппинг
-- Аутентификация: OAuth2-приложение или входящий вебхук с правами CRM
-- Методы: `crm.company.add/update/get`, `crm.contact.add/update/get`, `crm.lead.add`, `crm.deal.add`, `crm.duplicate.findbycomm`, `tasks.task.add`
-- Поля (минимально):
-  - Company: TITLE, ADDRESS, ADDRESS_CITY, ADDRESS_REGION, WEB, PHONE[], EMAIL[]
-  - Contact: NAME, LAST_NAME, POST, PHONE[], EMAIL[], IM (TELEGRAM)
-  - Lead/Deal: TITLE, COMPANY_ID, CONTACT_ID, COMMENTS (источник/заметки), CATEGORY/STAGE
-- Дедупликация: поиск по PHONE/EMAIL/WEB; при совпадении — update вместо add
+## Knowledge Base (что подготовить)
+- Тех. характеристики (Arena): спецификации, гарантия, совместимость, материалы (PDF/ссылки).
+- Коммерция: цены, скидки по объёму, MOQ, логистика/сроки, условия поставки.
+- FAQ/Q&A и отработка возражений (краткие/подробные скрипты).
+- Сравнение с конкурентами и преимущества Dark Project.
+- Sales playbook и A/B шаблоны сообщений.
+- Системный промпт «РОП 20+ лет» (см. выше) для LLM.
 
-Пример маппинга (CompanyRecord → Bitrix24) — псевдо-шаблон:
-```json
-{
-  "Company": {
-    "TITLE": "{{clubName}}",
-    "ADDRESS": "{{address}}",
-    "ADDRESS_CITY": "{{city}}",
-    "ADDRESS_REGION": "{{region}}",
-    "WEB": "{{website}}",
-    "PHONE": "{{#each phones}}{\"VALUE\": \"{{this}}\", \"VALUE_TYPE\": \"WORK\"}{{/each}}",
-    "EMAIL": "{{#each emails}}{\"VALUE\": \"{{this}}\", \"VALUE_TYPE\": \"WORK\"}{{/each}}"
-  },
-  "Contact": {
-    "NAME": "{{ownerOrManager.fullName}}",
-    "POST": "{{ownerOrManager.role}}",
-    "PHONE": "{{#if ownerOrManager.phone}}[{\"VALUE\": \"{{ownerOrManager.phone}}\", \"VALUE_TYPE\": \"WORK\"}]{{/if}}",
-    "EMAIL": "{{#if ownerOrManager.email}}[{\"VALUE\": \"{{ownerOrManager.email}}\", \"VALUE_TYPE\": \"WORK\"}]{{/if}}",
-    "IM": "{{#if ownerOrManager.telegram}}[{\"VALUE\": \"telegram:{{ownerOrManager.telegram}}\", \"VALUE_TYPE\": \"WORK\"}]{{/if}}"
-  },
-  "Lead": {
-    "TITLE": "Dark Project Arena — {{clubName}}",
-    "COMMENTS": "Источник: {{sourceIds}}\nТеги: {{tags}}"
-  }
-}
-```
-
-## Telegram: бот или «как обычный TG» (userbot)
-- Бот: проще интеграция через ноды n8n; ограничения по инициированию диалога
-- Userbot: отдельный MTProto-сервис (Telethon/Pyrogram/TDLib) от имени обычного аккаунта. Экспонировать HTTP:
-  - POST `/sendMessage` {username|chatId, text, threadKey?}
-  - POST `/sendDocument` {username|chatId, fileUrl}
-  - Webhook `/inbox` → wf-10 (входящие)
-- Безопасность: хранить `api_id/api_hash`/сессию отдельно, rate-limit, токен-доступ, логировать только метаданные
-
-## Data Governance & Compliance
-- Официальные API Яндекс/2ГИС, соблюдение ToS и законов (персональные данные, коммерческие рассылки — opt-in/отписка)
-- Минимизировать состав данных в CRM, удалять по запросу, вести audit trail
+## Чек-лист готовности (Done)
+- JSON валиден (`jq .`) и импортируется в n8n без правок.
+- Все `nodes[].type/typeVersion` соответствуют `/docs`.
+- `connections` корректны, `id` уникальны, у каждой ноды есть `position`.
+- Секреты — только в `credentials`; без утечек в `parameters`.
+- Дедупликация в B24 работает (создаёт `update` при повторе).
+- Outreach отправляется хотя бы одним каналом; входящие попадают в wf-10.
+- Постпродажные касания создаются (задачи/сообщения) по расписанию.
 
 ## Testing
-- Валидация JSON (`jq .`), тестовый регион (dry-run без записи в CRM), затем включение апсерта
-- E2E: симулировать ответ клиента → проверить классификацию/ответ/эскалацию → обновление CRM
+- Dry-run на одном регионе, без записи в CRM (mock/флаг).
+- Интеграционный тест с тестовым порталом Bitrix24.
+- Симуляция входящих сообщений (webhook) и проверка ответов/эскалаций.
 
-## Versioning
-- Версии в именах файлов workflow (`_vNNN.json`) и в таблице изменений проекта
+## Roadmap (первый прогон)
+1) Ключи Яндекс/2ГИС → wf-03/04 (1 регион)
+2) wf-05 нормализация/дедупликация
+3) wf-07 интеграция Bitrix24 (песочница)
+4) wf-08/09 Telegram бот; при необходимости userbot-сервис
+5) wf-10 ответы/возражения (LLM+KB)
+6) wf-13 постпродажа и wf-14 отчётность
 
-## Roadmap
-1) Ключи Яндекс/2ГИС, настроить wf-03/04, протестировать один регион
-2) Реализовать wf-05 нормализацию/дедупликацию, проверить качество
-3) Подключить wf-07 к тестовому Bitrix24 (песочница)
-4) Включить wf-08/09 (Telegram бот); при необходимости развернуть userbot-сервис
-5) Поднять KB и LLM-ответы (wf-10), настроить возражения и эскалации
-6) Настроить wf-13 постпродажные касания и wf-14 отчётность
+## Примечания
+- Соблюдать ToS и закон о персональных данных, соблюдать opt-in/отписку.
+- Для userbot — держать сервис отдельным и безопасным; n8n общается по HTTPS.
