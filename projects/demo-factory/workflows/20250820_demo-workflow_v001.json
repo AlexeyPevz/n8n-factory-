@@ -1,0 +1,21 @@
+{
+  "name": "Demo Workflow",
+  "nodes": [
+    {
+      "id": "node-1",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "parameters": {}
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {},
+  "meta": {
+    "description": "Demo workflow produced by the factory scaffold",
+    "tags": ["template", "demo"]
+  },
+  "version": 2
+}
