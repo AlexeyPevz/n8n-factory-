@@ -1,0 +1,105 @@
+name: Sync n8n Knowledge Base
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-knowledge-base
+  cancel-in-progress: true
+
+jobs:
+  sync-all-sources:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout self
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1. Официальная документация n8n
+      - name: Sync n8n Official Docs
+        uses: actions/checkout@v4
+        with:
+          repository: n8n-io/n8n-docs
+          path: ./temp/official-docs
+
+      # 2. Крупнейшая коллекция workflow (2000+)
+      - name: Sync Zie619 Workflows
+        uses: actions/checkout@v4
+        with:
+          repository: Zie619/n8n-workflows
+          path: ./temp/zie619-workflows
+
+      # 3. AI-фокусированные темплейты (200+)
+      - name: Sync WassupJay Templates
+        uses: actions/checkout@v4
+        with:
+          repository: wassupjay/n8n-free-templates
+          path: ./temp/wassupjay-templates
+
+      # 4. LLM-оптимизированная документация
+      - name: Sync Awesome n8n
+        uses: actions/checkout@v4
+        with:
+          repository: Synaptiv-AI/awesome-n8n
+          path: ./temp/awesome-n8n
+
+      # 5. Профессиональные workflow
+      - name: Sync ProfSynapse Automations
+        uses: actions/checkout@v4
+        with:
+          repository: ProfSynapse/n8n-automations
+          path: ./temp/profsynapse
+
+      # 6. Обновляем локальную базу знаний
+      - name: Update Knowledge Base
+        run: |
+          set -e
+          mkdir -p docs examples community llm-docs
+
+          # Копируем официальную документацию
+          if [ -d "./temp/official-docs/docs" ]; then
+            cp -r ./temp/official-docs/docs/* ./docs/ 2>/dev/null || true
+          fi
+
+          # Копируем workflow коллекции
+          if [ -d "./temp/zie619-workflows" ]; then
+            find ./temp/zie619-workflows -name "*.json" -exec cp {} ./examples/ \; 2>/dev/null || true
+          fi
+
+          if [ -d "./temp/wassupjay-templates" ]; then
+            find ./temp/wassupjay-templates -name "*.json" -exec cp {} ./examples/ \; 2>/dev/null || true
+          fi
+
+          if [ -d "./temp/profsynapse" ]; then
+            find ./temp/profsynapse -name "*.json" -exec cp {} ./examples/ \; 2>/dev/null || true
+          fi
+
+          # Специальные файлы для LLM
+          if [ -f "./temp/awesome-n8n/n8n-docs-llms.txt" ]; then
+            cp ./temp/awesome-n8n/n8n-docs-llms.txt ./llm-docs/
+          fi
+
+          # Очищаем временные файлы
+          rm -rf ./temp
+
+          # Создаем метаданные
+          echo "Last updated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./LAST_SYNC.md
+          echo "Total workflow files: $(find ./examples -name "*.json" | wc -l)" >> ./LAST_SYNC.md
+
+      # 7. Коммитим изменения
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          if ! git diff --staged --quiet; then
+            git commit -m "🤖 Auto-sync: n8n knowledge base updated $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No changes to commit."
