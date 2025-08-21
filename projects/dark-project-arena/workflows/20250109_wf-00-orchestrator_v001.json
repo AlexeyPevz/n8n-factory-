@@ -17,14 +17,12 @@
     },
     {
       "id": "load-csv-001",
-      "name": "Load Geo Targets CSV",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "name": "Read Geo Targets CSV",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
       "position": [460, 200],
       "parameters": {
-        "method": "GET",
-        "url": "file:///workspace/projects/dark-project-arena/data/geo_targets.csv",
-        "responseFormat": "file",
+        "filePath": "/workspace/projects/dark-project-arena/data/geo_targets.csv",
         "options": {}
       }
     },
@@ -67,9 +65,7 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [1060, 200],
-      "parameters": {
-        "batchSize": 1
-      }
+      "parameters": { "batchSize": 1 }
     },
     {
       "id": "exec-wf01-001",
@@ -89,14 +85,10 @@
     {
       "id": "loop-continue-001",
       "name": "Next City",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [1460, 200],
-      "parameters": {
-        "options": {
-          "reset": true
-        }
-      }
+      "parameters": {}
     },
     {
       "id": "notify-001",
@@ -139,7 +131,7 @@
     "Extract From CSV": {"main": [[{"node": "Filter Current Wave", "type": "main", "index": 0}]]},
     "Filter Current Wave": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}], []]},
     "Split Cities": {"main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}]]},
-    "Run WF-01 per City": {"main": [[{"node": "Next City", "type": "main", "index": 0}]]},
+    "Run WF-01 per City": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}]]},
     "Next City": {"main": [[{"node": "Notify Wave Complete", "type": "main", "index": 0}]]},
     "Error Trigger": {"main": [[{"node": "Notify Error", "type": "main", "index": 0}]]}
   },
