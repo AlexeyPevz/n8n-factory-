@@ -306,10 +306,9 @@
       "typeVersion": 1,
       "position": [3460, 350],
       "parameters": {
-        "operation": "push",
-        "list": "errors:orchestrator",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:orchestrator",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 86400
       },

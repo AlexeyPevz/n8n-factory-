@@ -94,13 +94,14 @@
 
 | Node | Package | Версия | Использование |
 |------|---------|--------|---------------|
-| Redis | `@n8n_io/n8n-nodes-redis` | latest | WF-00, WF-01, WF-02, WF-04 |
 | Qdrant Vector Store | `@n8n/n8n-nodes-langchain` | latest | WF-04 (RAG) |
 
 **Установка**:
 ```bash
-npm install @n8n_io/n8n-nodes-redis @n8n/n8n-nodes-langchain
+npm install @n8n/n8n-nodes-langchain
 ```
+
+**Примечание**: Redis ноды входят в стандартный набор n8n (`n8n-nodes-base.redis`), дополнительная установка не требуется.
 
 **Настройка Bitrix24 Webhooks**:
 1. В Bitrix24 перейти в Приложения → Вебхуки
