@@ -1,0 +1,296 @@
+{
+  "name": "WF-03 Upsert CRM",
+  "nodes": [
+    {
+      "id": "webhook-trigger-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upsert-crm",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "validate-input-001",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 400],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!!$json.enrichedClub?.name && !!$json.enrichedClub?.phone}}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prepare-search-001",
+      "name": "Prepare Search",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 300],
+      "parameters": {
+        "functionCode": "const enrichedClub = items[0].json.enrichedClub;\n\nlet normalizedPhone = enrichedClub.phone || '';\nnormalizedPhone = normalizedPhone.replace(/[^0-9]/g, '');\nif (normalizedPhone.startsWith('8')) {\n  normalizedPhone = '7' + normalizedPhone.substring(1);\n}\n\nreturn [{ json: { enrichedClub, searchPhone: normalizedPhone, searchName: enrichedClub.name.toLowerCase().trim() } }];"
+      }
+    },
+    {
+      "id": "bitrix24-search-001",
+      "name": "Search Duplicate in Bitrix24",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [860, 300],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "additionalFields": {
+          "filter": "={{ { \"PHONE\": $json.searchPhone } }}",
+          "select": "ID,TITLE,STATUS_ID,PHONE,COMMENTS"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "compute-duplicate-flag-001",
+      "name": "Compute Duplicate Flag",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1060, 300],
+      "parameters": {
+        "functionCode": "const leads = $input.all().map(i => i.json); const duplicateExists = leads.length > 0; const firstLead = duplicateExists ? leads[0] : null; return [{ json: { duplicateExists, firstLead } }];"
+      }
+    },
+    {
+      "id": "check-duplicate-001",
+      "name": "Check if Duplicate Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1260, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.duplicateExists }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prepare-lead-create-001",
+      "name": "Prepare Lead Create Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 200],
+      "parameters": {
+        "functionCode": "const club = $node[\"Prepare Search\"].json.enrichedClub;\nconst phones = [{ VALUE: club.phone, VALUE_TYPE: 'WORK' }];\nif (club.additionalPhones && club.additionalPhones.length > 0) { club.additionalPhones.forEach(p => phones.push({ VALUE: p, VALUE_TYPE: 'WORK' })); }\nconst emails = []; if (club.email) emails.push({ VALUE: club.email, VALUE_TYPE: 'WORK' });\nconst fields = { TITLE: club.name, NAME: 'Владелец', STATUS_ID: 'NEW', SOURCE_ID: 'WEB', SOURCE_DESCRIPTION: `${club.source} (${club.sources?.join(', ') || club.source})`, ADDRESS: club.address, ADDRESS_CITY: club.city, ADDRESS_PROVINCE: club.region, COMMENTS: `Компьютерный клуб\\n\\nИсточники: ${club.sources?.join(', ') || club.source}\\nСеть: ${club.isChain ? 'Да' : 'Нет'}\\nБренд: ${club.brand || 'Не указан'}\\nКоличество филиалов: ${club.branchCount || 1}\\n\\nКонтакты:\\nTelegram: ${club.telegram || 'Не найден'}\\nVK: ${club.vk || 'Не найден'}\\nInstagram: ${club.instagram || 'Не найден'}\\nWebsite: ${club.url || 'Не указан'}\\n\\nРабочие часы: ${club.workingHours || 'Не указаны'}\\nКатегории: ${club.categories || club.rubrics || 'Не указаны'}\\n\\nКоординаты: ${club.coordinates?.lat},${club.coordinates?.lon}\\nПриоритет: ${club.priority || 'medium'}\\nОценка релевантности: ${club.relevanceScore || 5}/10\\nОценка ПК: ${club.estimatedPCs || 15}` };\nfields.PHONE = phones; if (emails.length) fields.EMAIL = emails;\nfields.UF_CRM_TELEGRAM = club.telegram || ''; fields.UF_CRM_VK = club.vk || ''; fields.UF_CRM_INSTAGRAM = club.instagram || ''; fields.UF_CRM_WEBSITE = club.url || ''; fields.UF_CRM_IS_CHAIN = club.isChain ? 'Y' : 'N'; fields.UF_CRM_BRAND = club.brand || ''; fields.UF_CRM_BRANCH_COUNT = club.branchCount || 1; fields.UF_CRM_COORDINATES = `${club.coordinates?.lat || 0},${club.coordinates?.lon || 0}`; fields.UF_CRM_PRIORITY = club.priority || 'medium'; fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore || 5; fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs || 15; fields.UF_CRM_WORKING_HOURS = club.workingHours || ''; fields.UF_CRM_ENRICHED_AT = club.enrichedAt || new Date().toISOString();\nreturn [{ json: { fields, enrichedClub: club } }];"
+      }
+    },
+    {
+      "id": "prepare-lead-update-001",
+      "name": "Prepare Lead Update Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 400],
+      "parameters": {
+        "functionCode": "const club = $node[\"Prepare Search\"].json.enrichedClub; const existing = $node[\"Compute Duplicate Flag\"].json.firstLead; const fields = {}; if (existing?.STATUS_ID === 'JUNK') fields.STATUS_ID = 'NEW'; fields.COMMENTS = `${existing?.COMMENTS || ''}\\n\\n[${new Date().toISOString()}] Обновлено из WF-03`; if (club.email) fields.EMAIL = [{ VALUE: club.email, VALUE_TYPE: 'WORK' }]; if (club.telegram) fields.UF_CRM_TELEGRAM = club.telegram; if (club.vk) fields.UF_CRM_VK = club.vk; if (club.instagram) fields.UF_CRM_INSTAGRAM = club.instagram; if (club.priority) fields.UF_CRM_PRIORITY = club.priority; if (club.relevanceScore) fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore; if (club.estimatedPCs) fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs; fields.UF_CRM_ENRICHED_AT = club.enrichedAt || new Date().toISOString(); return [{ json: { id: existing?.ID, fields, enrichedClub: club } }];"
+      }
+    },
+    {
+      "id": "bitrix24-create-001",
+      "name": "Create New Lead",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1660, 200],
+      "parameters": {
+        "resource": "lead",
+        "operation": "create",
+        "fields": "={{ $json.fields }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "bitrix24-update-001",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1660, 400],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.id }}",
+        "fields": "={{ $json.fields }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "merge-result-001",
+      "name": "Merge Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1860, 300],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-response-001",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2060, 300],
+      "parameters": {
+        "functionCode": "const created = $node[\"Create New Lead\"]; const updated = $node[\"Update Existing Lead\"]; const isUpdate = !!(updated && updated.json); const res = isUpdate ? updated.json : (created ? created.json : {}); const club = $node[\"Prepare Search\"].json.enrichedClub; const leadId = res.id || res.result || res.ID; return [{ json: { success: true, action: isUpdate ? 'updated' : 'created', leadId, clubName: club.name, clubCity: club.city, priority: club.priority, relevanceScore: club.relevanceScore, estimatedPCs: club.estimatedPCs, enrichedFields: { email: !!club.email, telegram: !!club.telegram, vk: !!club.vk, instagram: !!club.instagram }, timestamp: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "log-activity-001",
+      "name": "Log CRM Activity",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2260, 300],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `crm_activity:${new Date().toISOString()}:${$json.leadId}` }}",
+        "value": "={{JSON.stringify($json)}}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 7776000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "respond-success-001",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2460, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-invalid-001",
+      "name": "Respond Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [660, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  error: 'Invalid input data. Name and phone are required.',\n  receivedData: {\n    hasName: !!$json.enrichedClub?.name,\n    hasPhone: !!$json.enrichedClub?.phone\n  },\n  timestamp: new Date().toISOString()\n} }}",
+        "responseCode": 400,
+        "options": {}
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [2060, 600],
+      "parameters": {}
+    },
+    {
+      "id": "respond-error-001",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2260, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  error: $json.error?.message || 'Unknown error occurred',\n  node: $json.error?.node?.name,\n  timestamp: new Date().toISOString()\n} }}",
+        "responseCode": 500,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Validate Input", "type": "main", "index": 0 }]]
+    },
+    "Validate Input": {
+      "main": [[{ "node": "Prepare Search", "type": "main", "index": 0 }],[{ "node": "Respond Invalid", "type": "main", "index": 0 }]]
+    },
+    "Prepare Search": {
+      "main": [[{ "node": "Search Duplicate in Bitrix24", "type": "main", "index": 0 }]]
+    },
+    "Search Duplicate in Bitrix24": {
+      "main": [[{ "node": "Compute Duplicate Flag", "type": "main", "index": 0 }]]
+    },
+    "Compute Duplicate Flag": {
+      "main": [[{ "node": "Check if Duplicate Exists", "type": "main", "index": 0 }]]
+    },
+    "Check if Duplicate Exists": {
+      "main": [
+        [{ "node": "Prepare Lead Update Data", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Lead Create Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Lead Create Data": {
+      "main": [[{ "node": "Create New Lead", "type": "main", "index": 0 }]]
+    },
+    "Prepare Lead Update Data": {
+      "main": [[{ "node": "Update Existing Lead", "type": "main", "index": 0 }]]
+    },
+    "Create New Lead": {
+      "main": [[{ "node": "Merge Result", "type": "main", "index": 0 }]]
+    },
+    "Update Existing Lead": {
+      "main": [[{ "node": "Merge Result", "type": "main", "index": 1 }]]
+    },
+    "Merge Result": {
+      "main": [[{ "node": "Prepare Response", "type": "main", "index": 0 }]]
+    },
+    "Prepare Response": {
+      "main": [[{ "node": "Log CRM Activity", "type": "main", "index": 0 }]]
+    },
+    "Log CRM Activity": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Respond Error", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "version": 2,
+  "id": "wf-03-upsert-crm",
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": []
+}
