@@ -90,6 +90,7 @@
       "position": [1060, 200],
       "parameters": {
         "mode": "retrieve",
+        "collection": "dark-project-kb",
         "query": "={{ `${$json.context.clubName} ${$json.context.city} gaming club sales messaging` }}",
         "topK": 3
       },
@@ -128,7 +129,24 @@
       "typeVersion": 1,
       "position": [1060, 400],
       "parameters": {
-        "functionCode": "// Check if we've contacted this lead recently\nconst leadId = items[0].json.context.leadId;\nconst lastContactKey = `last_contact:${leadId}`;\n\n// In production, this would check Redis or database\n// for the last contact timestamp\nconst hoursSinceLastContact = 48; // Default to 48 hours\n\n// Business logic: don't contact more than once per 24 hours\nconst shouldContact = hoursSinceLastContact >= 24;\n\nreturn [{\n  json: {\n    ...items[0].json,\n    shouldContact,\n    hoursSinceLastContact\n  }\n}];"
+        "functionCode": "const leadId = items[0].json.context.leadId;\nconst raw = $node['Read Last Contact']?.json?.value;\nlet hoursSinceLastContact = 9999;\nif (raw) {\n  const lastTs = new Date(raw).getTime();\n  if (!isNaN(lastTs)) {\n    hoursSinceLastContact = Math.floor((Date.now() - lastTs) / 3600000);\n  }\n}\nconst shouldContact = hoursSinceLastContact >= 24;\nreturn [{ json: { ...items[0].json, shouldContact, hoursSinceLastContact } }];"
+      }
+    },
+    {
+      "id": "redis-get-last-contact-001",
+      "name": "Read Last Contact",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [960, 400],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ `last_contact:${$json.context.leadId}` }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
       }
     },
     {
@@ -308,13 +326,17 @@
     {
       "id": "handle-interested-001",
       "name": "Handle Interested",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [660, 600],
       "parameters": {
-        "source": "database",
-        "workflowId": "={{ $env.WF_05_WORKFLOW_ID }}",
-        "waitForSubWorkflow": false
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_URL }}/webhook/hot-lead-handoff",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { leadId: $json.callback_query.message.text.match(/Lead ID: (\\\\d+)/)?.[1] || $json.context?.leadId, context: $json } }}",
+        "options": { "timeout": 30000, "headerParameters": { "parameters": [ { "name": "X-Webhook-Secret", "value": "={{ $env.WEBHOOK_SECRET }}" } ] } },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       }
     },
     {
@@ -437,6 +459,17 @@
       ]
     },
     "Prepare Context": {
+      "main": [
+        [
+          {
+            "node": "Read Last Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Contact": {
       "main": [
         [
           {

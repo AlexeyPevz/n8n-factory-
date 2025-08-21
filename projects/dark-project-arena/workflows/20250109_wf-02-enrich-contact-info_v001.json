@@ -186,7 +186,7 @@
       "typeVersion": 1,
       "position": [2060, 600],
       "parameters": {
-        "functionCode": "const error = items[0].json.error;\nconst club = ($node[\"Webhook Trigger\"] && $node[\"Webhook Trigger\"].json && $node[\"Webhook Trigger\"].json.club) ? $node[\"Webhook Trigger\"].json.club : {};\n\nconsole.error('Enrichment Error:', {\n  workflow: 'WF-02 Enrich Contact Info',\n  clubName: club.name,\n  error: error?.message,\n  node: error?.node?.name,\n  timestamp: new Date().toISOString()\n});\n\nreturn [{\n  json: {\n    success: false,\n    error: error?.message,\n    clubName: club.name\n  }\n}];"
+        "functionCode": "const error = items[0].json.error;\nconst source = $node[\"When Executed by Another Workflow\"]?.json || {};\nconst club = source.club || {};\n\nconsole.error('Enrichment Error:', {\n  workflow: 'WF-02 Enrich Contact Info',\n  clubName: club.name,\n  error: error?.message,\n  node: error?.node?.name,\n  timestamp: new Date().toISOString()\n});\n\nreturn [{\n  json: {\n    success: false,\n    error: error?.message,\n    clubName: club.name\n  }\n}];"
       }
     },
     {
