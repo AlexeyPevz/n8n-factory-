@@ -205,7 +205,7 @@
       "position": [660, 600],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\u007b{\n  success: false,\n  error: 'Invalid input data. Name and phone are required.',\n  receivedData: {\n    hasName: !!$json.enrichedClub?.name,\n    hasPhone: !!$json.enrichedClub?.phone\n  },\n  timestamp: new Date().toISOString()\n}\u007d}",
+        "responseBody": "={{ {\n  success: false,\n  error: 'Invalid input data. Name and phone are required.',\n  receivedData: {\n    hasName: !!$json.enrichedClub?.name,\n    hasPhone: !!$json.enrichedClub?.phone\n  },\n  timestamp: new Date().toISOString()\n} }}",
         "responseCode": 400,
         "options": {}
       }
@@ -226,7 +226,7 @@
       "position": [2260, 600],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\u007b{\n  success: false,\n  error: $json.error?.message || 'Unknown error occurred',\n  node: $json.error?.node?.name,\n  timestamp: new Date().toISOString()\n}\u007d}",
+        "responseBody": "={{ {\n  success: false,\n  error: $json.error?.message || 'Unknown error occurred',\n  node: $json.error?.node?.name,\n  timestamp: new Date().toISOString()\n} }}",
         "responseCode": 500,
         "options": {}
       }

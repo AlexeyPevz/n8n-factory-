@@ -222,7 +222,11 @@
       "position": [1700, 400],
       "parameters": {
         "source": "database",
-        "workflowId": "={{$env.WF_02_WORKFLOW_ID}}"
+        "workflowId": "={{$env.WF_02_WORKFLOW_ID}}",
+        "waitForSubWorkflow": false,
+        "additionalFields": {
+          "input": "={{ { club: $json.club } }}"
+        }
       }
     },
     {
