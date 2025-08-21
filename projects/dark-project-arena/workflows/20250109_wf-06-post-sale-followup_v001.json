@@ -63,7 +63,7 @@
       "id": "prepare-followup-data-001",
       "name": "Prepare Followup Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [860, 400],
       "parameters": {
         "mode": "manual",
@@ -74,7 +74,7 @@
               "id": "followupData",
               "name": "followupData",
               "type": "object",
-              "value": "={{ {\n  dealId: $('Get Deal Details').item.json.ID,\n  dealAmount: $('Get Deal Details').item.json.OPPORTUNITY,\n  clubName: $('Get Deal Details').item.json.TITLE,\n  closeDate: $('Get Deal Details').item.json.CLOSEDATE,\n  contactName: $json.NAME || '',\n  contactPhone: $json.PHONE?.[0]?.VALUE || '',\n  contactEmail: $json.EMAIL?.[0]?.VALUE || '',\n  contactTelegram: $json.IM?.[0]?.VALUE || $json.UF_TELEGRAM || ''\n} }}"
+              "value": "={{ {\n  dealId: $node['Get Deal Details'].json.ID,\n  dealAmount: $node['Get Deal Details'].json.OPPORTUNITY,\n  clubName: $node['Get Deal Details'].json.TITLE,\n  closeDate: $node['Get Deal Details'].json.CLOSEDATE,\n  contactName: $json.NAME || '',\n  contactPhone: $json.PHONE?.[0]?.VALUE || '',\n  contactEmail: $json.EMAIL?.[0]?.VALUE || '',\n  contactTelegram: $json.IM?.[0]?.VALUE || $json.UF_TELEGRAM || ''\n} }}"
             }
           ]
         }
@@ -87,7 +87,7 @@
       "typeVersion": 1,
       "position": [1060, 400],
       "parameters": {
-        "functionCode": "// Calculate followup dates from deal close date\nconst closeDate = new Date(items[0].json.followupData.closeDate);\n\nconst followupSchedule = [\n  {\n    delay: 7,\n    type: 'week_1',\n    message: 'Первая неделя использования'\n  },\n  {\n    delay: 30,\n    type: 'month_1',\n    message: 'Первый месяц использования'\n  },\n  {\n    delay: 90,\n    type: 'month_3',\n    message: 'Три месяца использования'\n  },\n  {\n    delay: 180,\n    type: 'month_6',\n    message: 'Полгода использования'\n  }\n];\n\nconst outputs = followupSchedule.map(schedule => {\n  const followupDate = new Date(closeDate);\n  followupDate.setDate(followupDate.getDate() + schedule.delay);\n  \n  return {\n    json: {\n      ...items[0].json.followupData,\n      followupType: schedule.type,\n      followupMessage: schedule.message,\n      followupDate: followupDate.toISOString(),\n      daysFromClose: schedule.delay\n    }\n  };\n});\n\nreturn outputs;"
+        "functionCode": "// Calculate followup dates from deal close date\nconst closeDate = new Date(items[0].json.followupData.closeDate);\n\nconst followupSchedule = [\n  { delay: 7, type: 'week_1', message: 'Первая неделя использования' },\n  { delay: 30, type: 'month_1', message: 'Первый месяц использования' },\n  { delay: 90, type: 'month_3', message: 'Три месяца использования' },\n  { delay: 180, type: 'month_6', message: 'Полгода использования' }\n];\n\nconst outputs = followupSchedule.map(schedule => {\n  const followupDate = new Date(closeDate);\n  followupDate.setDate(followupDate.getDate() + schedule.delay);\n  return { json: {\n    ...items[0].json.followupData,\n    followupType: schedule.type,\n    followupMessage: schedule.message,\n    followupDate: followupDate.toISOString(),\n    daysFromClose: schedule.delay\n  } };\n});\n\nreturn outputs;"
       }
     },
     {
@@ -105,7 +105,7 @@
       "id": "wait-until-date-001",
       "name": "Wait Until Followup Date",
       "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [1460, 400],
       "parameters": {
         "resume": "date",
@@ -116,7 +116,7 @@
     {
       "id": "generate-followup-message-001",
       "name": "Generate Followup Message",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [1660, 400],
       "parameters": {
@@ -138,7 +138,7 @@
       "id": "send-followup-telegram-001",
       "name": "Send Followup Telegram",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [1860, 300],
       "parameters": {
         "operation": "sendMessage",
@@ -149,27 +149,11 @@
           "reply_markup": {
             "inline_keyboard": [
               [
-                {
-                  "text": "👍 Все отлично",
-                  "callback_data": "feedback_excellent"
-                },
-                {
-                  "text": "👌 Хорошо",
-                  "callback_data": "feedback_good"
-                }
+                { "text": "👍 Все отлично", "callback_data": "feedback_excellent" },
+                { "text": "👌 Хорошо", "callback_data": "feedback_good" }
               ],
-              [
-                {
-                  "text": "🤔 Есть вопросы",
-                  "callback_data": "feedback_questions"
-                }
-              ],
-              [
-                {
-                  "text": "😕 Есть проблемы",
-                  "callback_data": "feedback_problems"
-                }
-              ]
+              [ { "text": "🤔 Есть вопросы", "callback_data": "feedback_questions" } ],
+              [ { "text": "😕 Есть проблемы", "callback_data": "feedback_problems" } ]
             ]
           }
         }
@@ -186,13 +170,13 @@
       "id": "send-followup-email-001",
       "name": "Send Followup Email",
       "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1860, 500],
       "parameters": {
         "sendTo": "={{ $json.contactEmail }}",
-        "subject": "={\u007b `Dark Project | ${$json.followupMessage} - ${$json.clubName}` \u007d}",
+        "subject": "={{ `Dark Project | ${$json.followupMessage} - ${$json.clubName}` }}",
         "emailType": "html",
-        "htmlBody": "={\u007b `<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.8; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }\n    .content { padding: 30px; background: #f8f9fa; border-radius: 0 0 10px 10px; }\n    .feedback-buttons { margin: 30px 0; text-align: center; }\n    .btn { display: inline-block; padding: 12px 30px; margin: 10px; text-decoration: none; border-radius: 25px; font-weight: bold; }\n    .btn-excellent { background: #28a745; color: white; }\n    .btn-good { background: #17a2b8; color: white; }\n    .btn-questions { background: #ffc107; color: #333; }\n    .btn-problems { background: #dc3545; color: white; }\n    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>Dark Project Arena</h1>\n      <p style=\"margin: 0; font-size: 18px;\">${$json.followupMessage}</p>\n    </div>\n    <div class=\"content\">\n      <p>Здравствуйте, ${$json.contactName}!</p>\n      \n      <div style=\"white-space: pre-line;\">${$json.message.replace(/\\*\\*/g, '').replace(/\\*/g, '')}</div>\n      \n      <div class=\"feedback-buttons\">\n        <h3>Как у вас дела с оборудованием?</h3>\n        <a href=\"mailto:support@darkproject.ru?subject=Отзыв: Все отлично&body=Клуб: ${$json.clubName}\" class=\"btn btn-excellent\">👍 Все отлично</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Отзыв: Хорошо&body=Клуб: ${$json.clubName}\" class=\"btn btn-good\">👌 Хорошо</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Есть вопросы&body=Клуб: ${$json.clubName}\" class=\"btn btn-questions\">🤔 Есть вопросы</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Есть проблемы&body=Клуб: ${$json.clubName}\" class=\"btn btn-problems\">😕 Есть проблемы</a>\n      </div>\n    </div>\n    <div class=\"footer\">\n      <p>С уважением,<br>Команда Dark Project</p>\n      <p>📞 8-800-XXX-XX-XX | 💬 @darkproject_support</p>\n    </div>\n  </div>\n</body>\n</html>` \u007d}",
+        "htmlBody": "={{ `<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.8; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }\n    .content { padding: 30px; background: #f8f9fa; border-radius: 0 0 10px 10px; }\n    .feedback-buttons { margin: 30px 0; text-align: center; }\n    .btn { display: inline-block; padding: 12px 30px; margin: 10px; text-decoration: none; border-radius: 25px; font-weight: bold; }\n    .btn-excellent { background: #28a745; color: white; }\n    .btn-good { background: #17a2b8; color: white; }\n    .btn-questions { background: #ffc107; color: #333; }\n    .btn-problems { background: #dc3545; color: white; }\n    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>Dark Project Arena</h1>\n      <p style=\"margin: 0; font-size: 18px;\">${$json.followupMessage}</p>\n    </div>\n    <div class=\"content\">\n      <p>Здравствуйте, ${$json.contactName}!</p>\n      <div style=\"white-space: pre-line;\">${$json.message.replace(/\\*\\*/g, '').replace(/\\*/g, '')}</div>\n      <div class=\"feedback-buttons\">\n        <h3>Как у вас дела с оборудованием?</h3>\n        <a href=\"mailto:support@darkproject.ru?subject=Отзыв: Все отлично&body=Клуб: ${$json.clubName}\" class=\"btn btn-excellent\">👍 Все отлично</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Отзыв: Хорошо&body=Клуб: ${$json.clubName}\" class=\"btn btn-good\">👌 Хорошо</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Есть вопросы&body=Клуб: ${$json.clubName}\" class=\"btn btn-questions\">🤔 Есть вопросы</a>\n        <a href=\"mailto:support@darkproject.ru?subject=Есть проблемы&body=Клуб: ${$json.clubName}\" class=\"btn btn-problems\">😕 Есть проблемы</a>\n      </div>\n    </div>\n    <div class=\"footer\">\n      <p>С уважением,<br>Команда Dark Project</p>\n      <p>📞 8-800-XXX-XX-XX | 💬 @darkproject_support</p>\n    </div>\n  </div>\n</body>\n</html>` }}",
         "options": {
           "allowUnauthorizedCerts": true
         }
@@ -220,7 +204,7 @@
         "completed": "1",
         "responsibleId": "={{ $env.CRM_BOT_USER_ID }}",
         "additionalFields": {
-          "TYPE_ID": "EMAIL",
+          "TYPE_ID": "={{ $json.contactTelegram ? 'IM' : 'EMAIL' }}",
           "DIRECTION": "2",
           "ENTITY_TYPE_ID": "3",
           "ENTITY_ID": "={{ $json.dealId }}"
@@ -237,7 +221,7 @@
       "id": "check-more-followups-001",
       "name": "Check More Followups",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [2260, 400],
       "parameters": {
         "conditions": {
@@ -249,11 +233,11 @@
           "conditions": [
             {
               "id": "hasMore",
-              "leftValue": "={{ $node['Split Followups'].context.currentRunIndex }}",
-              "rightValue": "={{ $node['Split Followups'].context.maxRunIndex }}",
+              "leftValue": "={{ $node['Split Followups'].context.itemsLeft }}",
+              "rightValue": "={{ 0 }}",
               "operator": {
                 "type": "number",
-                "operation": "smaller"
+                "operation": "larger"
               }
             }
           ],
@@ -265,7 +249,7 @@
       "id": "telegram-feedback-trigger-001",
       "name": "Telegram Feedback Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 800],
       "parameters": {
         "updates": ["callback_query"]
@@ -287,26 +271,10 @@
         "mode": "expression",
         "rules": {
           "rules": [
-            {
-              "output": 0,
-              "outputKey": "excellent",
-              "expression": "={{ $json.callback_query.data === 'feedback_excellent' }}"
-            },
-            {
-              "output": 1,
-              "outputKey": "good",
-              "expression": "={{ $json.callback_query.data === 'feedback_good' }}"
-            },
-            {
-              "output": 2,
-              "outputKey": "questions",
-              "expression": "={{ $json.callback_query.data === 'feedback_questions' }}"
-            },
-            {
-              "output": 3,
-              "outputKey": "problems",
-              "expression": "={{ $json.callback_query.data === 'feedback_problems' }}"
-            }
+            { "output": 0, "outputKey": "excellent", "expression": "={{ $json.callback_query.data === 'feedback_excellent' }}" },
+            { "output": 1, "outputKey": "good", "expression": "={{ $json.callback_query.data === 'feedback_good' }}" },
+            { "output": 2, "outputKey": "questions", "expression": "={{ $json.callback_query.data === 'feedback_questions' }}" },
+            { "output": 3, "outputKey": "problems", "expression": "={{ $json.callback_query.data === 'feedback_problems' }}" }
           ]
         },
         "fallbackOutput": 4
@@ -316,7 +284,7 @@
       "id": "handle-positive-feedback-001",
       "name": "Handle Positive Feedback",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
         "operation": "sendMessage",
@@ -335,7 +303,7 @@
       "id": "handle-questions-problems-001",
       "name": "Handle Questions/Problems",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 900],
       "parameters": {
         "operation": "sendMessage",
@@ -360,7 +328,7 @@
         "resource": "task",
         "operation": "create",
         "title": "={{ `Support: ${$json.callback_query.data === 'feedback_questions' ? 'Вопросы' : 'Проблемы'} от ${$json.callback_query.from.first_name}` }}",
-        "description": "={{ `Клиент запросил поддержку через follow-up\\n\\nТип: ${$json.callback_query.data}\\nTelegram: @${$json.callback_query.from.username}\\nДата: ${new Date().toISOString()}` }}",
+        "description": "={{ `Клиент запросил поддержку через follow-up\n\nТип: ${$json.callback_query.data}\nTelegram: @${$json.callback_query.from.username}\nДата: ${new Date().toISOString()}` }}",
         "responsibleId": "={{ $env.SUPPORT_USER_ID }}",
         "additionalFields": {
           "DEADLINE": "={{ new Date(Date.now() + 3600000).toISOString() }}",
@@ -394,214 +362,25 @@
     }
   ],
   "connections": {
-    "Bitrix24 Deal Won Trigger": {
-      "main": [
-        [
-          {
-            "node": "Get Deal Details",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Deal Details": {
-      "main": [
-        [
-          {
-            "node": "Get Contact Info",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Contact Info": {
-      "main": [
-        [
-          {
-            "node": "Prepare Followup Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Followup Data": {
-      "main": [
-        [
-          {
-            "node": "Schedule Followups",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Schedule Followups": {
-      "main": [
-        [
-          {
-            "node": "Split Followups",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Followups": {
-      "main": [
-        [
-          {
-            "node": "Wait Until Followup Date",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait Until Followup Date": {
-      "main": [
-        [
-          {
-            "node": "Generate Followup Message",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate Followup Message": {
-      "main": [
-        [
-          {
-            "node": "Send Followup Telegram",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send Followup Email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Followup Telegram": {
-      "main": [
-        [
-          {
-            "node": "Log Followup Activity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Followup Email": {
-      "main": [
-        [
-          {
-            "node": "Log Followup Activity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Followup Activity": {
-      "main": [
-        [
-          {
-            "node": "Check More Followups",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check More Followups": {
-      "main": [
-        [
-          {
-            "node": "Split Followups",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Telegram Feedback Trigger": {
-      "main": [
-        [
-          {
-            "node": "Process Feedback",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Process Feedback": {
-      "main": [
-        [
-          {
-            "node": "Handle Positive Feedback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Handle Positive Feedback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Handle Questions/Problems",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Handle Questions/Problems",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Handle Questions/Problems": {
-      "main": [
-        [
-          {
-            "node": "Create Support Ticket",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error Handler": {
-      "main": [
-        [
-          {
-            "node": "Log Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+    "Bitrix24 Deal Won Trigger": { "main": [[ { "node": "Get Deal Details", "type": "main", "index": 0 } ]] },
+    "Get Deal Details": { "main": [[ { "node": "Get Contact Info", "type": "main", "index": 0 } ]] },
+    "Get Contact Info": { "main": [[ { "node": "Prepare Followup Data", "type": "main", "index": 0 } ]] },
+    "Prepare Followup Data": { "main": [[ { "node": "Schedule Followups", "type": "main", "index": 0 } ]] },
+    "Schedule Followups": { "main": [[ { "node": "Split Followups", "type": "main", "index": 0 } ]] },
+    "Split Followups": { "main": [[ { "node": "Wait Until Followup Date", "type": "main", "index": 0 } ]] },
+    "Wait Until Followup Date": { "main": [[ { "node": "Generate Followup Message", "type": "main", "index": 0 } ]] },
+    "Generate Followup Message": { "main": [[ { "node": "Send Followup Telegram", "type": "main", "index": 0 }, { "node": "Send Followup Email", "type": "main", "index": 0 } ]] },
+    "Send Followup Telegram": { "main": [[ { "node": "Log Followup Activity", "type": "main", "index": 0 } ]] },
+    "Send Followup Email": { "main": [[ { "node": "Log Followup Activity", "type": "main", "index": 0 } ]] },
+    "Log Followup Activity": { "main": [[ { "node": "Check More Followups", "type": "main", "index": 0 } ]] },
+    "Check More Followups": { "main": [[ { "node": "Split Followups", "type": "main", "index": 0 } ]] },
+    "Telegram Feedback Trigger": { "main": [[ { "node": "Process Feedback", "type": "main", "index": 0 } ]] },
+    "Process Feedback": { "main": [[ { "node": "Handle Positive Feedback", "type": "main", "index": 0 } ], [ { "node": "Handle Positive Feedback", "type": "main", "index": 0 } ], [ { "node": "Handle Questions/Problems", "type": "main", "index": 0 } ], [ { "node": "Handle Questions/Problems", "type": "main", "index": 0 } ]] },
+    "Handle Questions/Problems": { "main": [[ { "node": "Create Support Ticket", "type": "main", "index": 0 } ]] },
+    "Error Handler": { "main": [[ { "node": "Log Error", "type": "main", "index": 0 } ]] }
   },
   "active": false,
-  "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true
-  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
   "version": 2,
   "meta": {
     "description": "Automated post-sale followup with scheduled touchpoints at 1 week, 1/3/6 months",

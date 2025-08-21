@@ -9,7 +9,7 @@
       "position": [260, 400],
       "parameters": {
         "resource": "lead",
-        "event": "create,update"
+        "event": ["add","update"]
       },
       "credentials": {
         "bitrix24Api": {
@@ -22,7 +22,7 @@
       "id": "check-lead-status-001",
       "name": "Check Lead Status",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [460, 400],
       "parameters": {
         "conditions": {
@@ -68,19 +68,44 @@
     {
       "id": "load-knowledge-base-001",
       "name": "Load Knowledge Base",
-      "type": "n8n-nodes-base.vectorStoreInMemory",
+      "type": "n8n-nodes-langchain.vectorStoreQdrant",
       "typeVersion": 1,
       "position": [860, 200],
       "parameters": {
         "mode": "load",
         "vectorStoreId": "dark-project-kb"
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_KB",
+          "name": "Qdrant KB"
+        }
+      }
+    },
+    {
+      "id": "retrieve-kb-001",
+      "name": "Retrieve KB Context",
+      "type": "n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [1060, 200],
+      "parameters": {
+        "mode": "retrieve",
+        "collection": "dark-project-kb",
+        "query": "={{ `${$json.context.clubName} ${$json.context.city} gaming club sales messaging` }}",
+        "topK": 3
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_KB",
+          "name": "Qdrant KB"
+        }
       }
     },
     {
       "id": "prepare-context-001",
       "name": "Prepare Context",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [860, 400],
       "parameters": {
         "mode": "manual",
@@ -104,14 +129,31 @@
       "typeVersion": 1,
       "position": [1060, 400],
       "parameters": {
-        "functionCode": "// Check if we've contacted this lead recently\nconst leadId = items[0].json.context.leadId;\nconst lastContactKey = `last_contact:${leadId}`;\n\n// In production, this would check Redis or database\n// for the last contact timestamp\nconst hoursSinceLastContact = 48; // Default to 48 hours\n\n// Business logic: don't contact more than once per 24 hours\nconst shouldContact = hoursSinceLastContact >= 24;\n\nreturn [{\n  json: {\n    ...items[0].json,\n    shouldContact,\n    hoursSinceLastContact\n  }\n}];"
+        "functionCode": "const leadId = items[0].json.context.leadId;\nconst raw = $node['Read Last Contact']?.json?.value;\nlet hoursSinceLastContact = 9999;\nif (raw) {\n  const lastTs = new Date(raw).getTime();\n  if (!isNaN(lastTs)) {\n    hoursSinceLastContact = Math.floor((Date.now() - lastTs) / 3600000);\n  }\n}\nconst shouldContact = hoursSinceLastContact >= 24;\nreturn [{ json: { ...items[0].json, shouldContact, hoursSinceLastContact } }];"
+      }
+    },
+    {
+      "id": "redis-get-last-contact-001",
+      "name": "Read Last Contact",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [960, 400],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ `last_contact:${$json.context.leadId}` }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
       }
     },
     {
       "id": "if-should-contact-001",
       "name": "Should Contact?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1260, 400],
       "parameters": {
         "conditions": {
@@ -138,7 +180,7 @@
     {
       "id": "generate-message-001",
       "name": "Generate Sales Message",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [1460, 300],
       "parameters": {
@@ -146,7 +188,7 @@
         "temperature": 0.7,
         "maxTokens": 500,
         "systemMessage": "Ты — Руководитель отдела продаж с 20-летним опытом в компьютерной периферии. Сторонник SPIN и Challenger-подходов. Коммуницируешь дружелюбно, по делу, на «ты», быстро приводишь выгоды, отрабатываешь возражения по методике Feel-Felt-Found, владеешь цифрами (ROI, LTV, маржа). Твоя цель — довести клиента до заказа, оставаясь экспертом-консультантом.\n\nТы продаешь периферию Dark Project серии «Арена» для компьютерных клубов. Ключевые преимущества:\n- Цена ниже конкурентов на 15-20%\n- Гарантия 2 года vs 1 год у конкурентов\n- Сервис в РФ\n- Специализация на киберспорт-аренах\n- Оптовые условия + бренд-материалы",
-        "messages": "={{ `Контекст:\nКомпьютерный клуб: ${$json.context.clubName}\nГород: ${$json.context.city}\nСеть: ${$json.context.isChain ? 'Да' : 'Нет'}\nСтатус лида: ${$json.context.status}\n\nЗадача: Составь персонализированное сообщение для первого/повторного контакта. Сообщение должно быть коротким (до 500 символов), дружелюбным и содержать конкретную выгоду. Если это сеть клубов - упомяни специальные условия для сетей.` }}",
+        "messages": "={{ `Контекст:\nКомпьютерный клуб: ${$json.context.clubName}\nГород: ${$json.context.city}\nСеть: ${$json.context.isChain ? 'Да' : 'Нет'}\nСтатус лида: ${$json.context.status}\nРелевантные факты (KB): ${( $json.documents || [] ).map(d => d.pageContent).join(' \n- ') || 'нет'}\n\nЗадача: Составь персонализированное сообщение для первого/повторного контакта. Сообщение должно быть коротким (до 500 символов), дружелюбным и содержать конкретную выгоду. Если это сеть клубов - упомяни специальные условия для сетей.` }}",
         "options": {}
       },
       "credentials": {
@@ -157,48 +199,40 @@
       }
     },
     {
+      "id": "preserve-message-001",
+      "name": "Preserve Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1460, 360],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {"assignments": [ {"id":"msg","name":"message","type":"string","value":"={{ $json.message }}"} ]}
+      }
+    },
+    {
       "id": "send-telegram-001",
-      "name": "Send Telegram Message",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "name": "MTProto Send Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [1660, 300],
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.context.telegram }}",
-        "text": "={{ $json.message }}",
-        "additionalFields": {
-          "parse_mode": "Markdown",
-          "reply_markup": {
-            "inline_keyboard": [
-              [
-                {
-                  "text": "🔥 Интересно, расскажите больше",
-                  "callback_data": "interested_more"
-                }
-              ],
-              [
-                {
-                  "text": "📋 Прислать прайс-лист",
-                  "callback_data": "request_price"
-                }
-              ],
-              [
-                {
-                  "text": "❌ Не интересует",
-                  "callback_data": "not_interested"
-                }
-              ]
-            ]
-          }
-        }
-      },
-      "credentials": {
-        "telegramApi": {
-          "id": "TG_ROP_BOT",
-          "name": "Telegram ROP Bot"
-        }
+        "method": "POST",
+        "url": "={{ $env.MTPROTO_BRIDGE_URL }}/send_message",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { username: $json.context.telegram, text: $json.message, parseMode: 'Markdown' } }}",
+        "options": { "timeout": 30000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
       "continueOnFail": true
+    },
+    {
+      "id": "merge-msg-001",
+      "name": "Merge Context+Msg",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1860, 300],
+      "parameters": {"mode":"combine","combinationMode":"mergeByPosition"}
     },
     {
       "id": "update-lead-status-001",
@@ -247,7 +281,7 @@
       "id": "telegram-callback-trigger-001",
       "name": "Telegram Callback Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 700],
       "parameters": {
         "updates": ["callback_query"]
@@ -292,20 +326,24 @@
     {
       "id": "handle-interested-001",
       "name": "Handle Interested",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [660, 600],
       "parameters": {
-        "source": "database",
-        "workflowId": "={{ $env.WF_05_WORKFLOW_ID }}",
-        "waitForSubWorkflow": false
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_URL }}/webhook/hot-lead-handoff",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { leadId: $json.callback_query.message.text.match(/Lead ID: (\\\\d+)/)?.[1] || $json.context?.leadId, context: $json } }}",
+        "options": { "timeout": 30000, "headerParameters": { "parameters": [ { "name": "X-Webhook-Secret", "value": "={{ $env.WEBHOOK_SECRET }}" } ] } },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       }
     },
     {
       "id": "send-price-list-001",
       "name": "Send Price List",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
         "operation": "sendDocument",
@@ -402,6 +440,17 @@
       "main": [
         [
           {
+            "node": "Retrieve KB Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve KB Context": {
+      "main": [
+        [
+          {
             "node": "Generate Sales Message",
             "type": "main",
             "index": 0
@@ -410,6 +459,17 @@
       ]
     },
     "Prepare Context": {
+      "main": [
+        [
+          {
+            "node": "Read Last Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Contact": {
       "main": [
         [
           {
@@ -446,14 +506,36 @@
       "main": [
         [
           {
-            "node": "Send Telegram Message",
+            "node": "Preserve Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Telegram Message": {
+    "Preserve Message": {
+      "main": [
+        [
+          {
+            "node": "MTProto Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MTProto Send Message": {
+      "main": [
+        [
+          {
+            "node": "Merge Context+Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context+Msg": {
       "main": [
         [
           {

@@ -5,13 +5,28 @@
       "id": "webhook-trigger-001",
       "name": "Hot Lead Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 400],
       "parameters": {
         "httpMethod": "POST",
         "path": "hot-lead-handoff",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "responseCode": 200,
+          "responseData": "allEntries",
+          "responseHeaders": {
+            "entries": [
+              { "name": "X-Workflow", "value": "WF-05" }
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "N8N_WEBHOOK_SECRET",
+          "name": "N8N Webhook Secret"
+        }
       }
     },
     {
@@ -58,7 +73,7 @@
       "id": "prepare-handoff-data-001",
       "name": "Prepare Handoff Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [660, 500],
       "parameters": {
         "mode": "manual",
@@ -78,7 +93,7 @@
     {
       "id": "generate-proposal-001",
       "name": "Generate Commercial Proposal",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [860, 500],
       "parameters": {
@@ -98,24 +113,31 @@
     },
     {
       "id": "create-pdf-proposal-001",
-      "name": "Create PDF Proposal",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "name": "Generate PDF via API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [1060, 500],
       "parameters": {
-        "functionCode": "// This is a placeholder for PDF generation\n// In production, this would use a PDF generation service\n// like Puppeteer, PDFKit, or an external API\n\nconst proposal = items[0].json;\nconst handoffData = items[0].json.handoffData;\n\n// Simulate PDF creation\nconst pdfData = {\n  filename: `КП_${handoffData.clubInfo.name.replace(/[^а-яА-Я0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,\n  content: proposal.message,\n  metadata: {\n    title: `Коммерческое предложение для ${handoffData.clubInfo.name}`,\n    author: 'Dark Project Sales Team',\n    subject: 'Поставка игровой периферии Dark Project Arena',\n    keywords: ['gaming', 'peripherals', 'dark project', 'arena']\n  },\n  size: '~150KB'\n};\n\nreturn [{\n  json: {\n    ...items[0].json,\n    pdfProposal: pdfData\n  }\n}];"
+        "method": "POST",
+        "url": "={{ $env.PDF_SERVICE_URL }}/render",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { html: `<html><head><meta charset=\\\"utf-8\\\"></head><body><h2>Коммерческое предложение</h2><p><b>Клуб:</b> ${$json.handoffData.clubInfo.name}</p><p><b>Город:</b> ${$json.handoffData.clubInfo.city}</p><hr/><div style=\\\"white-space:pre-wrap\\\">${$json.message}</div></body></html>` } }}",
+        "responseFormat": "file",
+        "options": { "timeout": 60000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       }
     },
     {
       "id": "notify-supplier-telegram-001",
       "name": "Notify Supplier Telegram",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [1260, 400],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.SUPPLIER_TELEGRAM_CHAT_ID }}",
-        "text": "={\u007b `🔥 *ГОРЯЧИЙ ЛИД!*\n\n🏢 *Клуб:* ${$json.handoffData.clubInfo.name}\n📍 *Город:* ${$json.handoffData.clubInfo.city}\n${$json.handoffData.clubInfo.isChain ? '🔗 *Сетевой клуб*\n' : ''}\n📞 *Телефон:* ${$json.handoffData.contacts.phone}\n✉️ *Email:* ${$json.handoffData.contacts.email || 'Не указан'}\n💬 *Telegram:* ${$json.handoffData.contacts.telegram || 'Не указан'}\n\n💰 *Потенциал сделки:* ${$json.handoffData.opportunity.estimatedDealSize || 'Не оценен'} ${$json.handoffData.opportunity.currency}\n\n📋 *История взаимодействия:*\n${$json.handoffData.engagement.comments?.slice(-500) || 'Нет комментариев'}\n\n📎 КП отправлено на email поставщика\n🔗 [Открыть в CRM](https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/)` \u007d}",
+        "text": "={{ `🔥 *ГОРЯЧИЙ ЛИД!*\n\n🏢 *Клуб:* ${$json.handoffData.clubInfo.name}\n📍 *Город:* ${$json.handoffData.clubInfo.city}\n${$json.handoffData.clubInfo.isChain ? '🔗 *Сетевой клуб*\n' : ''}\n📞 *Телефон:* ${$json.handoffData.contacts.phone}\n✉️ *Email:* ${$json.handoffData.contacts.email || 'Не указан'}\n💬 *Telegram:* ${$json.handoffData.contacts.telegram || 'Не указан'}\n\n💰 *Потенциал сделки:* ${$json.handoffData.opportunity.estimatedDealSize || 'Не оценен'} ${$json.handoffData.opportunity.currency}\n\n📋 *История взаимодействия:*\n${$json.handoffData.engagement.comments?.slice(-500) || 'Нет комментариев'}\n\n📎 КП отправлено на email поставщика\n🔗 [Открыть в CRM](https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/)` }}",
         "additionalFields": {
           "parse_mode": "Markdown",
           "reply_markup": {
@@ -147,14 +169,14 @@
       "id": "send-email-supplier-001",
       "name": "Send Email to Supplier",
       "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1260, 600],
       "parameters": {
         "sendTo": "={{ $env.SUPPLIER_EMAIL }}",
-        "subject": "={\u007b `🔥 Горячий лид: ${$json.handoffData.clubInfo.name} - ${$json.handoffData.clubInfo.city}` \u007d}",
+        "subject": "={{ `🔥 Горячий лид: ${$json.handoffData.clubInfo.name} - ${$json.handoffData.clubInfo.city}` }}",
         "emailType": "html",
-        "htmlBody": "={\u007b `<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }\n    .content { padding: 20px; background: #f4f4f4; }\n    .info-block { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }\n    .cta { background: #e74c3c; color: white; padding: 15px 30px; text-decoration: none; display: inline-block; margin: 20px 0; border-radius: 5px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🔥 Горячий лид передан в работу</h1>\n    </div>\n    <div class=\"content\">\n      <div class=\"info-block\">\n        <h2>Информация о клубе</h2>\n        <p><strong>Название:</strong> ${$json.handoffData.clubInfo.name}</p>\n        <p><strong>Город:</strong> ${$json.handoffData.clubInfo.city}</p>\n        <p><strong>Адрес:</strong> ${$json.handoffData.clubInfo.address}</p>\n        <p><strong>Сетевой клуб:</strong> ${$json.handoffData.clubInfo.isChain ? 'Да' : 'Нет'}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Контакты</h2>\n        <p><strong>Телефон:</strong> ${$json.handoffData.contacts.phone}</p>\n        <p><strong>Email:</strong> ${$json.handoffData.contacts.email || 'Не указан'}</p>\n        <p><strong>Telegram:</strong> ${$json.handoffData.contacts.telegram || 'Не указан'}</p>\n        <p><strong>Контактное лицо:</strong> ${$json.handoffData.contacts.contactPerson}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Коммерческое предложение</h2>\n        <p>${$json.message?.replace(/\\n/g, '<br>')}</p>\n      </div>\n      \n      <a href=\"https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/\" class=\"cta\">Открыть в CRM</a>\n    </div>\n  </div>\n</body>\n</html>` \u007d}",
-        "attachments": "={{ $json.pdfProposal ? $json.pdfProposal.filename : '' }}",
+        "htmlBody": "={{ `<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }\n    .content { padding: 20px; background: #f4f4f4; }\n    .info-block { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }\n    .cta { background: #e74c3c; color: white; padding: 15px 30px; text-decoration: none; display: inline-block; margin: 20px 0; border-radius: 5px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🔥 Горячий лид передан в работу</h1>\n    </div>\n    <div class=\"content\">\n      <div class=\"info-block\">\n        <h2>Информация о клубе</h2>\n        <p><strong>Название:</strong> ${$json.handoffData.clubInfo.name}</p>\n        <p><strong>Город:</strong> ${$json.handoffData.clubInfo.city}</p>\n        <p><strong>Адрес:</strong> ${$json.handoffData.clubInfo.address}</p>\n        <p><strong>Сетевой клуб:</strong> ${$json.handoffData.clubInfo.isChain ? 'Да' : 'Нет'}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Контакты</h2>\n        <p><strong>Телефон:</strong> ${$json.handoffData.contacts.phone}</p>\n        <p><strong>Email:</strong> ${$json.handoffData.contacts.email || 'Не указан'}</p>\n        <p><strong>Telegram:</strong> ${$json.handoffData.contacts.telegram || 'Не указан'}</p>\n        <p><strong>Контактное лицо:</strong> ${$json.handoffData.contacts.contactPerson}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Коммерческое предложение</h2>\n        <p>${$json.message?.replace(/\\n/g, '<br>')}</p>\n      </div>\n      \n      <a href=\"https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/\" class=\"cta\">Открыть в CRM</a>\n    </div>\n  </div>\n</body>\n</html>` }}",
+        "attachments": { "attachments": [ { "binaryPropertyName": "data" } ] },
         "options": {
           "allowUnauthorizedCerts": true
         }
@@ -167,25 +189,26 @@
       }
     },
     {
-      "id": "update-lead-handed-001",
-      "name": "Update Lead as Handed Off",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "id": "convert-lead-001",
+      "name": "Convert Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [1460, 500],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.handoffData.leadId }}",
-        "updateFields": {
-          "STATUS_ID": "CONVERTED",
-          "COMMENTS": "={{ `${$json.handoffData.engagement.comments}\\n\\n[${new Date().toISOString()}] ЛИД ПЕРЕДАН ПОСТАВЩИКУ\\nКП отправлено на email и в Telegram\\nОжидается обратная связь от поставщика` }}",
-          "ASSIGNED_BY_ID": "={{ $env.SUPPLIER_BITRIX_USER_ID }}"
-        }
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_DOMAIN }}/rest/crm.lead.convert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { id: $json.handoffData.leadId, params: { CONVERT_DEAL: 'Y', CONVERT_CONTACT: 'Y', CONVERT_COMPANY: 'N', DEAL_CATEGORY_ID: 0, ASSIGNED_BY_ID: $env.SUPPLIER_BITRIX_USER_ID } } }}",
+        "options": { "timeout": 30000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
       "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "httpQueryAuth": {
+          "id": "BITRIX24_WEBHOOK",
+          "name": "Bitrix24 Webhook"
         }
       }
     },
@@ -214,7 +237,7 @@
       "id": "webhook-response-001",
       "name": "Webhook Response",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [1860, 400],
       "parameters": {
         "respondWith": "json",
@@ -244,12 +267,12 @@
       "id": "notify-admin-error-001",
       "name": "Notify Admin Error",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [2260, 700],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
-        "text": "={\u007b `❌ *CRITICAL ERROR in Hot Lead Handoff*\\n\\nLead: ${$json.leadData.clubInfo?.name || 'Unknown'}\\nError: ${$json.error.message}\\nNode: ${$json.error.node?.name}\\n\\nRequires immediate attention!` \u007d}",
+        "text": "={{ `❌ *CRITICAL ERROR in Hot Lead Handoff*\n\nLead: ${$json.leadData.clubInfo?.name || 'Unknown'}\nError: ${$json.error.message}\nNode: ${$json.error.node?.name}\n\nRequires immediate attention!` }}",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -318,7 +341,7 @@
         ]
       ]
     },
-    "Create PDF Proposal": {
+    "Generate PDF via API": {
       "main": [
         [
           {
@@ -338,7 +361,7 @@
       "main": [
         [
           {
-            "node": "Update Lead as Handed Off",
+            "node": "Convert Lead",
             "type": "main",
             "index": 0
           }
@@ -349,14 +372,14 @@
       "main": [
         [
           {
-            "node": "Update Lead as Handed Off",
+            "node": "Convert Lead",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Lead as Handed Off": {
+    "Convert Lead": {
       "main": [
         [
           {
