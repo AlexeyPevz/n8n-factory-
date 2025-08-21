@@ -2,6 +2,16 @@
   "name": "WF-01 Fetch Gaming Clubs",
   "nodes": [
     {
+      "id": "exec-trigger-001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
       "id": "manual-trigger-001",
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
@@ -57,7 +67,7 @@
       "typeVersion": 1,
       "position": [700, 400],
       "parameters": {
-        "functionCode": "const cities = [\n  {city: 'Москва', region: 'Московская область'},\n  {city: 'Санкт-Петербург', region: 'Ленинградская область'},\n  {city: 'Новосибирск', region: 'Новосибирская область'},\n  {city: 'Екатеринбург', region: 'Свердловская область'},\n  {city: 'Казань', region: 'Республика Татарстан'},\n  {city: 'Нижний Новгород', region: 'Нижегородская область'},\n  {city: 'Челябинск', region: 'Челябинская область'},\n  {city: 'Самара', region: 'Самарская область'},\n  {city: 'Омск', region: 'Омская область'},\n  {city: 'Ростов-на-Дону', region: 'Ростовская область'}\n];\n\nconst cityIndex = $json.cityIndex || 0;\n\nif (cityIndex < cities.length) {\n  return [{\n    json: {\n      ...cities[cityIndex],\n      searchQuery: $json.searchQuery,\n      cityIndex: cityIndex,\n      totalCities: cities.length,\n      hasMore: cityIndex < cities.length - 1\n    }\n  }];\n} else {\n  return [{\n    json: {\n      completed: true,\n      totalProcessed: cities.length\n    }\n  }];\n}"
+        "functionCode": "// If executed by orchestrator, a city object should be present on input\nif ($json.city) {\n  return [{ json: {\n    city: $json.city,\n    region: $json.region || '',\n    searchQuery: $json.searchQuery || $json.query || 'компьютерный клуб киберспорт'\n  }}];\n}\n\n// Fallback manual list for ad-hoc runs\nconst cities = [\n  {city: 'Москва', region: 'Московская область'},\n  {city: 'Санкт-Петербург', region: 'Ленинградская область'},\n  {city: 'Новосибирск', region: 'Новосибирская область'}\n];\n\nconst cityIndex = $json.cityIndex || 0;\nif (cityIndex < cities.length) {\n  return [{ json: {\n    ...cities[cityIndex],\n    searchQuery: $json.searchQuery,\n    cityIndex,\n    totalCities: cities.length,\n    hasMore: cityIndex < cities.length - 1\n  }}];\n}\nreturn [{ json: { completed: true, totalProcessed: cities.length } }];"
       }
     },
     {
@@ -106,6 +116,10 @@
             {
               "name": "results",
               "value": "500"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $env.YANDEX_MAPS_API_KEY }}"
             }
           ]
         },
@@ -140,10 +154,6 @@
               "value": "={{$json.searchQuery}}"
             },
             {
-              "name": "city",
-              "value": "={{$json.city}}"
-            },
-            {
               "name": "type",
               "value": "branch"
             },
@@ -154,6 +164,10 @@
             {
               "name": "fields",
               "value": "items.contact_groups,items.point,items.address_name,items.org"
+            },
+            {
+              "name": "key",
+              "value": "={{ $env.TWOGIS_API_KEY }}"
             }
           ]
         },
@@ -209,41 +223,6 @@
       "parameters": {
         "source": "database",
         "workflowId": "={{$env.WF_02_WORKFLOW_ID}}"
-      }
-    },
-    {
-      "id": "increment-city-001",
-      "name": "Increment City Index",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [1900, 400],
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "searchQuery",
-              "value": "={{$node[\"Cities Data\"].json.searchQuery}}"
-            }
-          ],
-          "number": [
-            {
-              "name": "cityIndex",
-              "value": "={{$node[\"Cities Data\"].json.cityIndex + 1}}"
-            }
-          ]
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "wait-001",
-      "name": "Wait 5 seconds",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [2100, 400],
-      "parameters": {
-        "amount": 5,
-        "unit": "seconds"
       }
     },
     {
@@ -306,6 +285,17 @@
     }
   ],
   "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set Search Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Manual Trigger": {
       "main": [
         [
@@ -420,33 +410,7 @@
     "Trigger Enrichment": {
       "main": [
         [
-          {
-            "node": "Increment City Index",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Increment City Index": {
-      "main": [
-        [
-          {
-            "node": "Wait 5 seconds",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait 5 seconds": {
-      "main": [
-        [
-          {
-            "node": "Cities Data",
-            "type": "main",
-            "index": 0
-          }
+          
         ]
       ]
     },

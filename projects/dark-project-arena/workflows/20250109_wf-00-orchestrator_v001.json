@@ -1,0 +1,151 @@
+{
+  "name": "WF-00 Orchestrator",
+  "nodes": [
+    {
+      "id": "cron-001",
+      "name": "Waves Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            { "mode": "custom", "cronExpression": "0 2 * * *" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "load-csv-001",
+      "name": "Load Geo Targets CSV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "file:///workspace/projects/dark-project-arena/data/geo_targets.csv",
+        "responseFormat": "file",
+        "options": {}
+      }
+    },
+    {
+      "id": "parse-csv-001",
+      "name": "Extract From CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "parameters": {
+        "operation": "fromFile",
+        "binaryPropertyName": "data",
+        "fileFormat": "csv",
+        "options": {
+          "headerRow": true
+        }
+      }
+    },
+    {
+      "id": "filter-wave-001",
+      "name": "Filter Current Wave",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 200],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.priority_wave }}",
+              "operation": "equals",
+              "value2": "1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "split-001",
+      "name": "Split Cities",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1060, 200],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "exec-wf01-001",
+      "name": "Run WF-01 per City",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1260, 200],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.WF_01_WORKFLOW_ID }}",
+        "waitForSubWorkflow": false,
+        "additionalFields": {
+          "input": "={{ { city: $json.city, region: $json.region, query: 'компьютерный клуб киберспорт' } }}"
+        }
+      }
+    },
+    {
+      "id": "loop-continue-001",
+      "name": "Next City",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1460, 200],
+      "parameters": {
+        "options": {
+          "reset": true
+        }
+      }
+    },
+    {
+      "id": "notify-001",
+      "name": "Notify Wave Complete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1660, 200],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `✅ WF-00 Orchestrator: wave processed at ${new Date().toISOString()}` }}"
+      },
+      "credentials": {"telegramApi": {"id": "TELEGRAM_BOT", "name": "Telegram Bot"}}
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1260, 400],
+      "parameters": {}
+    },
+    {
+      "id": "error-notify-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1460, 400],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `❌ WF-00 Error: ${$json.error?.message || 'Unknown'}` }}"
+      },
+      "credentials": {"telegramApi": {"id": "TELEGRAM_BOT", "name": "Telegram Bot"}}
+    }
+  ],
+  "connections": {
+    "Waves Schedule": {"main": [[{"node": "Load Geo Targets CSV", "type": "main", "index": 0}]]},
+    "Load Geo Targets CSV": {"main": [[{"node": "Extract From CSV", "type": "main", "index": 0}]]},
+    "Extract From CSV": {"main": [[{"node": "Filter Current Wave", "type": "main", "index": 0}]]},
+    "Filter Current Wave": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}], []]},
+    "Split Cities": {"main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}]]},
+    "Run WF-01 per City": {"main": [[{"node": "Next City", "type": "main", "index": 0}]]},
+    "Next City": {"main": [[{"node": "Notify Wave Complete", "type": "main", "index": 0}]]},
+    "Error Trigger": {"main": [[{"node": "Notify Error", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "version": 2,
+  "id": "wf-00-orchestrator",
+  "meta": {"description": "Orchestrates geo waves and runs WF-01 per city"}
+}
