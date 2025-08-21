@@ -193,6 +193,10 @@
             {
               "name": "key",
               "value": "={{ $env.TWOGIS_API_KEY }}"
+            },
+            {
+              "name": "city_id",
+              "value": "={{ $json.city_id_2gis || $node['Cities Data'].json.city_id_2gis || '' }}"
             }
           ]
         },

@@ -9,7 +9,7 @@
       "position": [260, 400],
       "parameters": {
         "resource": "lead",
-        "event": "create,update"
+        "event": ["add","update"]
       },
       "credentials": {
         "bitrix24Api": {
@@ -169,6 +169,17 @@
       }
     },
     {
+      "id": "preserve-message-001",
+      "name": "Preserve Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1460, 360],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {"assignments": [ {"id":"msg","name":"message","type":"string","value":"={{ $json.message }}"} ]}
+      }
+    },
+    {
       "id": "send-telegram-001",
       "name": "MTProto Send Message",
       "type": "n8n-nodes-base.httpRequest",
@@ -180,9 +191,18 @@
         "jsonParameters": true,
         "sendBody": true,
         "bodyParametersJson": "={{ { username: $json.context.telegram, text: $json.message, parseMode: 'Markdown' } }}",
-        "options": { "timeout": 30000 }
+        "options": { "timeout": 30000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
       "continueOnFail": true
+    },
+    {
+      "id": "merge-msg-001",
+      "name": "Merge Context+Msg",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1860, 300],
+      "parameters": {"mode":"combine","combinationMode":"mergeByPosition"}
     },
     {
       "id": "update-lead-status-001",

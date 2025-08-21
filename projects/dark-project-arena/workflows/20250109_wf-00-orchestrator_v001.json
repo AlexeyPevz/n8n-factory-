@@ -78,18 +78,11 @@
         "workflowId": "={{ $env.WF_01_WORKFLOW_ID }}",
         "waitForSubWorkflow": false,
         "additionalFields": {
-          "input": "={{ { city: $json.city, region: $json.region, query: 'компьютерный клуб киберспорт' } }}"
+          "input": "={{ { city: $json.city, region: $json.region, city_id_2gis: $json.city_id_2gis, query: 'компьютерный клуб киберспорт' } }}"
         }
       }
     },
-    {
-      "id": "loop-continue-001",
-      "name": "Next City",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1460, 200],
-      "parameters": {}
-    },
+    
     {
       "id": "notify-001",
       "name": "Notify Wave Complete",
@@ -130,9 +123,8 @@
     "Load Geo Targets CSV": {"main": [[{"node": "Extract From CSV", "type": "main", "index": 0}]]},
     "Extract From CSV": {"main": [[{"node": "Filter Current Wave", "type": "main", "index": 0}]]},
     "Filter Current Wave": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}], []]},
-    "Split Cities": {"main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}]]},
+    "Split Cities": {"main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}], [{"node": "Notify Wave Complete", "type": "main", "index": 0}]]},
     "Run WF-01 per City": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}]]},
-    "Next City": {"main": [[{"node": "Notify Wave Complete", "type": "main", "index": 0}]]},
     "Error Trigger": {"main": [[{"node": "Notify Error", "type": "main", "index": 0}]]}
   },
   "active": false,
