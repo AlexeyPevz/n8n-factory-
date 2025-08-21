@@ -22,22 +22,25 @@
       "typeVersion": 1,
       "position": [460, 200],
       "parameters": {
-        "filePath": "/workspace/projects/dark-project-arena/data/geo_targets.csv",
-        "options": {}
+        "filePath": "/workspace/projects/dark-project-arena/data/geo_targets.csv"
       }
     },
     {
       "id": "parse-csv-001",
       "name": "Extract From CSV",
-      "type": "n8n-nodes-base.extractFromFile",
+      "type": "n8n-nodes-base.spreadsheetFile",
       "typeVersion": 1,
       "position": [660, 200],
       "parameters": {
         "operation": "fromFile",
-        "binaryPropertyName": "data",
         "fileFormat": "csv",
         "options": {
-          "headerRow": true
+          "headerRow": true,
+          "delimiter": ",",
+          "fromLine": 1,
+          "maxRows": -1,
+          "enableBOM": false,
+          "includeEmptyCells": false
         }
       }
     },
@@ -68,18 +71,15 @@
       "parameters": { "batchSize": 1 }
     },
     {
-      "id": "exec-wf01-001",
-      "name": "Run WF-01 per City",
-      "type": "n8n-nodes-base.executeWorkflow",
+    {
+      "id": "wait-rate-limit-001",
+      "name": "Rate Limit Delay",
+      "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [1260, 200],
+      "position": [1560, 200],
       "parameters": {
-        "source": "database",
-        "workflowId": "={{ $env.WF_01_WORKFLOW_ID }}",
-        "waitForSubWorkflow": false,
-        "additionalFields": {
-          "input": "={{ { city: $json.city, region: $json.region, city_id_2gis: $json.city_id_2gis, query: 'компьютерный клуб киберспорт' } }}"
-        }
+        "amount": 2,
+        "unit": "seconds"
       }
     },
     
@@ -119,12 +119,13 @@
     }
   ],
   "connections": {
-    "Waves Schedule": {"main": [[{"node": "Load Geo Targets CSV", "type": "main", "index": 0}]]},
-    "Load Geo Targets CSV": {"main": [[{"node": "Extract From CSV", "type": "main", "index": 0}]]},
+    "Waves Schedule": {"main": [[{"node": "Read Geo Targets CSV", "type": "main", "index": 0}]]},
+    "Read Geo Targets CSV": {"main": [[{"node": "Extract From CSV", "type": "main", "index": 0}]]},
     "Extract From CSV": {"main": [[{"node": "Filter Current Wave", "type": "main", "index": 0}]]},
     "Filter Current Wave": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}], []]},
     "Split Cities": {"main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}], [{"node": "Notify Wave Complete", "type": "main", "index": 0}]]},
-    "Run WF-01 per City": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}]]},
+    "Run WF-01 per City": {"main": [[{"node": "Rate Limit Delay", "type": "main", "index": 0}]]},
+    "Rate Limit Delay": {"main": [[{"node": "Split Cities", "type": "main", "index": 0}]]},
     "Error Trigger": {"main": [[{"node": "Notify Error", "type": "main", "index": 0}]]}
   },
   "active": false,

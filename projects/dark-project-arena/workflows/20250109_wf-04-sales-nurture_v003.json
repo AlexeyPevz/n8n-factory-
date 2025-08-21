@@ -1,0 +1,606 @@
+{
+  "name": "WF-04 Sales Nurture",
+  "nodes": [
+    {
+      "id": "bitrix24-trigger-001",
+      "name": "Bitrix24 Lead Trigger",
+      "type": "n8n-nodes-base.bitrix24Trigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "resource": "lead",
+        "event": ["add","update"]
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "check-lead-status-001",
+      "name": "Check Lead Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isNewOrInProgress",
+              "leftValue": "={{ $json.STATUS_ID }}",
+              "rightValue": "NEW,IN_PROGRESS",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "get-lead-details-001",
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [660, 300],
+      "parameters": {
+        "resource": "lead",
+        "operation": "get",
+        "leadId": "={{ $json.ID }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "prepare-context-001",
+      "name": "Prepare Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 400],
+      "parameters": {
+        "functionCode": "const lead = items[0].json;\n\n// Normalize phone number\nlet phone = lead.PHONE?.[0]?.VALUE || '';\nphone = phone.replace(/[^0-9]/g, '');\nif (phone.startsWith('8')) {\n  phone = '7' + phone.substring(1);\n}\n\n// Build context object\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Компьютерный клуб',\n  city: lead.ADDRESS_CITY || lead.UF_CRM_CITY || 'Не указан',\n  region: lead.ADDRESS_PROVINCE || lead.UF_CRM_REGION || '',\n  phone: phone,\n  email: lead.EMAIL?.[0]?.VALUE || '',\n  telegram: lead.UF_CRM_TELEGRAM || lead.IM?.[0]?.VALUE || '',\n  status: lead.STATUS_ID,\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  brand: lead.UF_CRM_BRAND || '',\n  branchCount: parseInt(lead.UF_CRM_BRANCH_COUNT) || 1,\n  lastComment: lead.COMMENTS || '',\n  priority: lead.UF_CRM_PRIORITY || 'medium',\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 15,\n  created: lead.DATE_CREATE,\n  modified: lead.DATE_MODIFY,\n  runId: `nurture_${lead.ID}_${Date.now()}`\n};\n\nconsole.log(`Processing lead ${context.leadId}: ${context.clubName} (${context.city})`);\n\nreturn [{ json: { context, originalLead: lead } }];"
+      }
+    },
+    {
+      "id": "redis-get-last-contact-001",
+      "name": "Get Last Contact Time",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1060, 400],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ `last_contact:${$json.context.leadId}` }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "check-contact-interval-001",
+      "name": "Check Contact Interval",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 400],
+      "parameters": {
+        "functionCode": "const context = $json.context;\nconst lastContactRaw = $node['Get Last Contact Time']?.json?.value;\n\nlet hoursSinceLastContact = 9999;\nlet lastContactDate = null;\n\nif (lastContactRaw) {\n  try {\n    lastContactDate = new Date(lastContactRaw);\n    if (!isNaN(lastContactDate.getTime())) {\n      hoursSinceLastContact = Math.floor((Date.now() - lastContactDate.getTime()) / 3600000);\n    }\n  } catch (e) {\n    console.error('Failed to parse last contact date:', e);\n  }\n}\n\n// Business rules for contact frequency\nlet minHoursBetweenContacts = 24; // Default\nif (context.priority === 'high' || context.isChain) {\n  minHoursBetweenContacts = 12;\n} else if (context.priority === 'low') {\n  minHoursBetweenContacts = 48;\n}\n\nconst shouldContact = hoursSinceLastContact >= minHoursBetweenContacts;\n\nconsole.log(`Lead ${context.leadId}: ${hoursSinceLastContact}h since last contact, min interval: ${minHoursBetweenContacts}h, should contact: ${shouldContact}`);\n\nreturn [{ \n  json: { \n    ...items[0].json,\n    shouldContact,\n    hoursSinceLastContact,\n    lastContactDate,\n    minHoursBetweenContacts\n  } \n}];"
+      }
+    },
+    {
+      "id": "should-contact-if-001",
+      "name": "Should Contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1460, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "shouldContact",
+              "leftValue": "={{ $json.shouldContact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "load-kb-keys-001",
+      "name": "Load KB Keys",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1660, 200],
+      "parameters": {
+        "operation": "keys",
+        "keyPattern": "kb:darkproject:*"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "get-kb-content-001",
+      "name": "Get KB Content",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1860, 200],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "prepare-kb-context-001",
+      "name": "Prepare KB Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2060, 200],
+      "parameters": {
+        "functionCode": "// Get context from previous node\nconst leadContext = $node['Should Contact?'].json.context;\n\n// Process KB items\nconst kbItems = $input.all().map(item => {\n  try {\n    const value = item.json.value;\n    if (typeof value === 'string') {\n      return JSON.parse(value);\n    }\n    return value;\n  } catch (e) {\n    return { content: item.json.value || '' };\n  }\n});\n\n// Filter relevant KB facts based on context\nconst relevantFacts = [];\n\n// Priority facts for chains\nif (leadContext.isChain) {\n  const chainFacts = kbItems.filter(item => \n    item.tags?.includes('chain') || \n    item.content?.toLowerCase().includes('сеть') ||\n    item.content?.toLowerCase().includes('филиал')\n  );\n  relevantFacts.push(...chainFacts.slice(0, 2));\n}\n\n// City-specific facts\nconst cityFacts = kbItems.filter(item => \n  item.city === leadContext.city || \n  item.region === leadContext.region\n);\nrelevantFacts.push(...cityFacts.slice(0, 1));\n\n// General Dark Project facts\nconst productFacts = kbItems.filter(item => \n  item.tags?.includes('product') || \n  item.content?.toLowerCase().includes('dark project') ||\n  item.content?.toLowerCase().includes('arena')\n);\nrelevantFacts.push(...productFacts.slice(0, 2));\n\n// Limit total facts\nconst selectedFacts = relevantFacts.slice(0, 5);\n\nreturn [{ \n  json: { \n    leadContext,\n    kbContext: selectedFacts.map(f => f.content || f.text).join('\\n\\n'),\n    kbFactsCount: selectedFacts.length,\n    totalKbItems: kbItems.length\n  } \n}];"
+      }
+    },
+    {
+      "id": "merge-context-001",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2060, 400],
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "context.leadId",
+              "field2": "leadContext.leadId"
+            }
+          ]
+        },
+        "joinMode": "enrichInput2",
+        "options": {}
+      }
+    },
+    {
+      "id": "generate-message-openai-001",
+      "name": "Generate Message OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2260, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  \"model\": \"gpt-4o\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ты — Руководитель отдела продаж с 20-летним опытом в компьютерной периферии. Сторонник SPIN и Challenger-подходов. Коммуницируешь дружелюбно, по делу, на «ты», быстро приводишь выгоды, отрабатываешь возражения по методике Feel-Felt-Found, владеешь цифрами (ROI, LTV, маржа). Твоя цель — довести клиента до заказа, оставаясь экспертом-консультантом.\\n\\nТы продаешь периферию Dark Project серии «Арена» для компьютерных клубов. Ключевые преимущества:\\n- Цена ниже конкурентов на 15-20%\\n- Гарантия 2 года vs 1 год у конкурентов\\n- Сервис в РФ\\n- Специализация на киберспорт-аренах\\n- Оптовые условия + бренд-материалы\\n\\nВАЖНО: Сообщение должно быть КОРОТКИМ (до 500 символов), личным и с конкретной выгодой.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": `Контекст:\\nКомпьютерный клуб: ${$json.context.clubName}\\nГород: ${$json.context.city}\\nСеть: ${$json.context.isChain ? 'Да, ' + $json.context.branchCount + ' филиалов' : 'Нет'}\\nПриоритет: ${$json.context.priority}\\nОценка ПК: ${$json.context.estimatedPCs}\\nПоследний контакт: ${$json.hoursSinceLastContact}ч назад\\n\\nДополнительные факты:\\n${$json.kbContext || 'Нет'}\\n\\nЗадача: Составь персонализированное сообщение для ${$json.hoursSinceLastContact > 168 ? 'повторного' : 'следующего'} контакта. Учти контекст клуба и время с последнего контакта.`\n    }\n  ]\n} }}",
+        "options": { 
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "OPENAI_API_KEY",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "id": "parse-openai-response-001",
+      "name": "Parse OpenAI Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2460, 400],
+      "parameters": {
+        "functionCode": "const response = items[0].json;\nconst context = $node['Merge Context'].json.context;\n\n// Check for API errors\nif (response.statusCode !== 200) {\n  const error = response.body?.error || {};\n  console.error('OpenAI API Error:', error);\n  \n  // Fallback message\n  return [{\n    json: {\n      context,\n      message: `Привет! Заметил, что у вас ${context.estimatedPCs} ПК. Есть отличное предложение по апгрейду периферии Dark Project Arena со скидкой для ${context.isChain ? 'сетей' : 'клубов'}. Можем обсудить?`,\n      messageSource: 'fallback',\n      error: error.message || `API returned ${response.statusCode}`\n    }\n  }];\n}\n\n// Extract message from successful response\nconst messageContent = response.body?.choices?.[0]?.message?.content || '';\n\n// Validate and trim message\nlet finalMessage = messageContent.trim();\nif (finalMessage.length > 500) {\n  finalMessage = finalMessage.substring(0, 497) + '...';\n}\n\nif (!finalMessage) {\n  // Another fallback\n  finalMessage = `Добрый день! У нас специальное предложение для ${context.isChain ? 'сети клубов' : 'клуба'} ${context.clubName}. Новая линейка Dark Project Arena - идеальное решение для киберспорта. Интересно?`;\n}\n\nreturn [{\n  json: {\n    context,\n    message: finalMessage,\n    messageSource: 'openai',\n    usage: response.body?.usage,\n    model: response.body?.model\n  }\n}];"
+      }
+    },
+    {
+      "id": "check-telegram-available-001",
+      "name": "Check Telegram Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2660, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasTelegram",
+              "leftValue": "={{ $json.context.telegram }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-telegram-bot-001",
+      "name": "Send Telegram Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2860, 300],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.context.telegram }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true,
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "✅ Интересно",
+                  "callback_data": "interested_{{ $json.context.leadId }}"
+                },
+                {
+                  "text": "📞 Перезвоните",
+                  "callback_data": "callback_{{ $json.context.leadId }}"
+                }
+              ],
+              [
+                {
+                  "text": "❌ Не интересно",
+                  "callback_data": "not_interested_{{ $json.context.leadId }}"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "create-crm-task-001",
+      "name": "Create CRM Task",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [2860, 500],
+      "parameters": {
+        "resource": "task",
+        "operation": "create",
+        "title": "={{ `Связаться с ${$json.context.clubName}` }}",
+        "description": "={{ `Сообщение для отправки:\\n\\n${$json.message}\\n\\n---\\nКонтакты:\\nТелефон: ${$json.context.phone}\\nEmail: ${$json.context.email}\\nTelegram: ${$json.context.telegram || 'не указан'}\\n\\nПриоритет: ${$json.context.priority}\\nСеть: ${$json.context.isChain ? 'Да' : 'Нет'}` }}",
+        "responsible": "={{ $env.DEFAULT_SALES_USER_ID }}",
+        "deadline": "={{ new Date(Date.now() + 24*60*60*1000).toISOString() }}",
+        "additionalFields": {
+          "CRM_LEAD": "={{ $json.context.leadId }}",
+          "PRIORITY": "={{ $json.context.priority === 'high' ? '2' : '1' }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "merge-send-results-001",
+      "name": "Merge Send Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [3060, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      }
+    },
+    {
+      "id": "update-lead-001",
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [3260, 400],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.context.leadId }}",
+        "updateFields": {
+          "STATUS_ID": "IN_PROGRESS",
+          "COMMENTS": "={{ `${$json.context.lastComment}\\n\\n[${new Date().toISOString()}] Автоматическое сообщение:\\n${$json.message}\\nКанал: ${$json.sentVia || 'CRM Task'}` }}",
+          "UF_CRM_LAST_CONTACT": "={{ new Date().toISOString() }}",
+          "UF_CRM_CONTACT_COUNT": "={{ (parseInt($json.context.contactCount) || 0) + 1 }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "save-contact-time-001",
+      "name": "Save Contact Time",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [3460, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `last_contact:${$json.context.leadId}` }}",
+        "value": "={{ new Date().toISOString() }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "log-nurture-activity-001",
+      "name": "Log Nurture Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3660, 400],
+      "parameters": {
+        "functionCode": "const activity = {\n  workflow: 'WF-04 Sales Nurture',\n  leadId: $json.context.leadId,\n  clubName: $json.context.clubName,\n  city: $json.context.city,\n  action: 'message_sent',\n  channel: $json.sentVia || 'crm_task',\n  messageLength: $json.message.length,\n  messageSource: $json.messageSource,\n  timestamp: new Date().toISOString(),\n  runId: $json.context.runId\n};\n\nconsole.log('Nurture activity:', activity);\n\nreturn [{ json: activity }];"
+      }
+    },
+    {
+      "id": "save-activity-001",
+      "name": "Save Activity Log",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [3860, 400],
+      "parameters": {
+        "operation": "push",
+        "list": "log:nurture:activities",
+        "messageData": "={{ JSON.stringify($json) }}",
+        "tail": false
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "skip-contact-001",
+      "name": "Skip Contact",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 600],
+      "parameters": {
+        "functionCode": "const skipReason = {\n  leadId: $json.context.leadId,\n  reason: 'contact_interval_not_met',\n  hoursSinceLastContact: $json.hoursSinceLastContact,\n  minRequired: $json.minHoursBetweenContacts,\n  nextContactTime: new Date(Date.now() + ($json.minHoursBetweenContacts - $json.hoursSinceLastContact) * 3600000).toISOString()\n};\n\nconsole.log(`Skipping contact for lead ${skipReason.leadId}: only ${skipReason.hoursSinceLastContact}h passed, need ${skipReason.minRequired}h`);\n\nreturn [{ json: skipReason }];"
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 800],
+      "parameters": {}
+    },
+    {
+      "id": "format-error-001",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 800],
+      "parameters": {
+        "functionCode": "const error = {\n  workflow: 'WF-04 Sales Nurture',\n  timestamp: new Date().toISOString(),\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  leadId: $node['Prepare Context']?.json?.context?.leadId || 'Unknown',\n  stack: $json.error?.stack\n};\n\nconsole.error('Sales Nurture Error:', error);\n\nreturn [{ json: error }];"
+      }
+    },
+    {
+      "id": "save-error-redis-001",
+      "name": "Save Error",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [660, 800],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `error:nurture:${$json.leadId}:${Date.now()}` }}",
+        "value": "={{ JSON.stringify($json) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "notify-error-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [860, 800],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `❌ WF-04 Sales Nurture Error\\n\\nLead: ${$json.leadId}\\nError: ${$json.error}\\nNode: ${$json.node}` }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Bitrix24 Lead Trigger": {
+      "main": [[{"node": "Check Lead Status", "type": "main", "index": 0}]]
+    },
+    "Check Lead Status": {
+      "main": [
+        [{"node": "Get Lead Details", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Get Lead Details": {
+      "main": [[{"node": "Prepare Context", "type": "main", "index": 0}]]
+    },
+    "Prepare Context": {
+      "main": [[{"node": "Get Last Contact Time", "type": "main", "index": 0}]]
+    },
+    "Get Last Contact Time": {
+      "main": [[{"node": "Check Contact Interval", "type": "main", "index": 0}]]
+    },
+    "Check Contact Interval": {
+      "main": [[{"node": "Should Contact?", "type": "main", "index": 0}]]
+    },
+    "Should Contact?": {
+      "main": [
+        [{"node": "Load KB Keys", "type": "main", "index": 0}],
+        [{"node": "Skip Contact", "type": "main", "index": 0}]
+      ]
+    },
+    "Load KB Keys": {
+      "main": [[{"node": "Get KB Content", "type": "main", "index": 0}]]
+    },
+    "Get KB Content": {
+      "main": [[{"node": "Prepare KB Context", "type": "main", "index": 0}]]
+    },
+    "Prepare KB Context": {
+      "main": [[{"node": "Merge Context", "type": "main", "index": 0}]]
+    },
+    "Merge Context": {
+      "main": [[{"node": "Generate Message OpenAI", "type": "main", "index": 0}]]
+    },
+    "Generate Message OpenAI": {
+      "main": [[{"node": "Parse OpenAI Response", "type": "main", "index": 0}]]
+    },
+    "Parse OpenAI Response": {
+      "main": [[{"node": "Check Telegram Available", "type": "main", "index": 0}]]
+    },
+    "Check Telegram Available": {
+      "main": [
+        [{"node": "Send Telegram Message", "type": "main", "index": 0}],
+        [{"node": "Create CRM Task", "type": "main", "index": 0}]
+      ]
+    },
+    "Send Telegram Message": {
+      "main": [[{"node": "Merge Send Results", "type": "main", "index": 0}]]
+    },
+    "Create CRM Task": {
+      "main": [[{"node": "Merge Send Results", "type": "main", "index": 0}]]
+    },
+    "Merge Send Results": {
+      "main": [[{"node": "Update Lead Status", "type": "main", "index": 0}]]
+    },
+    "Update Lead Status": {
+      "main": [[{"node": "Save Contact Time", "type": "main", "index": 0}]]
+    },
+    "Save Contact Time": {
+      "main": [[{"node": "Log Nurture Activity", "type": "main", "index": 0}]]
+    },
+    "Log Nurture Activity": {
+      "main": [[{"node": "Save Activity Log", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Format Error", "type": "main", "index": 0}]]
+    },
+    "Format Error": {
+      "main": [[{"node": "Save Error", "type": "main", "index": 0}]]
+    },
+    "Save Error": {
+      "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 300
+  },
+  "version": 2,
+  "id": "wf-04-sales-nurture",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Sales nurturing with OpenAI integration, contact frequency control, and multi-channel delivery",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1", 
+      "name": "production"
+    }
+  ]
+}

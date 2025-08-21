@@ -1,0 +1,511 @@
+{
+  "name": "WF-04 Sales Nurture",
+  "nodes": [
+    {
+      "id": "bitrix-trigger-001",
+      "name": "Bitrix24 Lead Status",
+      "type": "n8n-nodes-base.bitrix24Trigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "eventsUi": {
+          "eventValues": [
+            {
+              "name": "onCrmLeadUpdate"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 450],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "check-lead-status-001",
+      "name": "Check Lead Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 450],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isNewOrInWork",
+              "leftValue": "={{ $json.data?.STATUS_ID || $json.STATUS_ID }}",
+              "rightValue": "NEW|IN_PROCESS",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "get-lead-details-001",
+      "name": "Get Lead Details",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [860, 350],
+      "parameters": {
+        "resource": "lead",
+        "operation": "get",
+        "leadId": "={{ $json.data?.ID || $json.ID || $json.leadId }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "check-last-contact-001",
+      "name": "Check Last Contact Time",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1060, 350],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ `last_contact:lead:${$json.ID}` }}",
+        "propertyName": "lastContact"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "check-contact-frequency-001",
+      "name": "Check Contact Frequency",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 350],
+      "parameters": {
+        "functionCode": "const lead = $node['Get Lead Details'].json;\nconst lastContactStr = $json.lastContact;\nconst now = new Date();\n\n// Определяем минимальный интервал между контактами\nlet minIntervalHours = 12; // По умолчанию 12 часов\n\n// Для приоритетных лидов увеличиваем частоту\nif (lead.UF_CRM_PRIORITY === 'high' || lead.UF_CRM_IS_CHAIN === 'Y') {\n  minIntervalHours = 6;\n}\n\n// Проверяем последний контакт\nlet canContact = true;\nlet hoursSinceLastContact = null;\n\nif (lastContactStr) {\n  const lastContact = new Date(lastContactStr);\n  hoursSinceLastContact = (now - lastContact) / (1000 * 60 * 60);\n  canContact = hoursSinceLastContact >= minIntervalHours;\n}\n\n// Подготавливаем контекст для LLM\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Компьютерный клуб',\n  contactName: lead.NAME || 'Владелец',\n  phone: lead.PHONE?.[0]?.VALUE || '',\n  telegram: lead.UF_CRM_TELEGRAM || '',\n  city: lead.ADDRESS_CITY || lead.UF_CRM_CITY || '',\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  branchCount: parseInt(lead.UF_CRM_BRANCH_COUNT) || 1,\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 15,\n  priority: lead.UF_CRM_PRIORITY || 'medium',\n  leadScore: parseInt(lead.UF_CRM_LEAD_SCORE) || 0,\n  status: lead.STATUS_ID,\n  comments: lead.COMMENTS || '',\n  lastActivity: lead.DATE_MODIFY,\n  canContact,\n  hoursSinceLastContact,\n  minIntervalHours,\n  contactCount: parseInt(lead.UF_CRM_CONTACT_COUNT) || 0\n};\n\nconsole.log(`Lead ${context.leadId}: canContact=${canContact}, hoursSinceLastContact=${hoursSinceLastContact}`);\n\nreturn [{ json: { context, canContact } }];"
+      }
+    },
+    {
+      "id": "route-by-frequency-001",
+      "name": "Route by Frequency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1460, 350],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "canContact",
+              "leftValue": "={{ $json.canContact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-rag-query-001",
+      "name": "Prepare RAG Query",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 250],
+      "parameters": {
+        "functionCode": "const context = $json.context;\n\n// Формируем запрос для векторного поиска\nconst query = `${context.city} компьютерный клуб ${context.isChain ? 'сетевой' : ''} ${context.estimatedPCs} компьютеров периферия оборудование`;\n\n// Метаданные для фильтрации\nconst metadata = {\n  type: context.isChain ? 'chain' : 'single',\n  size: context.estimatedPCs > 50 ? 'large' : context.estimatedPCs > 20 ? 'medium' : 'small'\n};\n\nconsole.log(`RAG query: ${query}`);\n\nreturn [{ \n  json: { \n    context,\n    ragQuery: query,\n    metadata\n  } \n}];"
+      }
+    },
+    {
+      "id": "qdrant-vector-search-001",
+      "name": "Vector Search Qdrant",
+      "type": "n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [1860, 250],
+      "parameters": {
+        "mode": "retrieve",
+        "topK": 3,
+        "qdrantCollection": "dark_project_kb"
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_API",
+          "name": "Qdrant API"
+        }
+      }
+    },
+    {
+      "id": "openai-embeddings-001",
+      "name": "OpenAI Embeddings",
+      "type": "n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1,
+      "position": [1860, 150],
+      "parameters": {
+        "model": "text-embedding-ada-002"
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "prepare-llm-prompt-001",
+      "name": "Prepare LLM Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2060, 250],
+      "parameters": {
+        "functionCode": "const context = $node['Check Contact Frequency'].json.context;\nconst vectorResults = $input.all();\n\n// Собираем релевантную информацию из векторного поиска\nlet kbContext = '';\nif (vectorResults && vectorResults.length > 0) {\n  kbContext = vectorResults\n    .map(item => item.json.pageContent || item.json.text || '')\n    .filter(text => text.length > 0)\n    .join('\\n\\n');\n}\n\n// Если векторный поиск не дал результатов, используем базовые факты\nif (!kbContext) {\n  kbContext = `\n- Периферия Dark Project Arena - премиальное игровое оборудование\n- Механические клавиатуры с RGB подсветкой\n- Игровые мыши с высоким DPI\n- Профессиональные гарнитуры\n- Гарантия 2 года, быстрая замена\n- Специальные условия для сетевых клубов\n- Бесплатная доставка от 500 000 руб\n  `;\n}\n\nreturn [{ \n  json: { \n    context,\n    kbContext,\n    messageType: context.contactCount === 0 ? 'initial' : 'followup'\n  } \n}];"
+      }
+    },
+    {
+      "id": "generate-message-001",
+      "name": "Generate Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2260, 250],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  \"model\": \"gpt-4\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ты — РОП 20Y, опытный руководитель отдела продаж периферии Dark Project Arena для компьютерных клубов. Тебе 35 лет, ты работаешь в индустрии 15 лет. Общаешься дружелюбно, на 'ты', используешь эмодзи, но в меру. Твои сообщения короткие (до 400 символов), личные и всегда содержат конкретную выгоду. Используешь SPIN-продажи: Situation-Problem-Implication-Need. Знаешь, что клубы заинтересованы в: надежности оборудования, быстрой окупаемости, привлечении геймеров, снижении затрат на обслуживание. Твоя цель - выявить потребности и назначить встречу или звонок.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": `Напиши ${$json.messageType === 'initial' ? 'первое' : 'повторное'} сообщение для компьютерного клуба.\\n\\nДанные клуба:\\n- Название: ${$json.context.clubName}\\n- Город: ${$json.context.city}\\n- Контакт: ${$json.context.contactName}\\n- Сеть: ${$json.context.isChain ? 'Да, ' + $json.context.branchCount + ' филиалов' : 'Нет'}\\n- Примерно ПК: ${$json.context.estimatedPCs}\\n- Приоритет: ${$json.context.priority}\\n- Контакт №${$json.context.contactCount + 1}\\n\\nРелевантная информация из базы знаний:\\n${$json.kbContext}\\n\\nТребования:\\n1. Обращение на 'ты' к ${$json.context.contactName || 'собеседнику'}\\n2. Упомяни город ${$json.context.city}\\n3. Конкретная выгода с цифрами из базы знаний\\n4. ${$json.context.isChain ? 'Обязательно упомяни специальные условия для сетей' : 'Фокус на качество и надежность'}\\n5. Мягкий призыв к действию (вопрос или предложение)\\n6. 1-2 эмодзи\\n7. Максимум 400 символов\\n8. ${$json.messageType === 'followup' ? 'Не повторяй информацию из предыдущих сообщений' : 'Представься как РОП Dark Project'}`\n    }\n  ]\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API",
+          "name": "OpenAI API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "parse-message-001",
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2460, 250],
+      "parameters": {
+        "functionCode": "const context = $node['Check Contact Frequency'].json.context;\nconst openAiResponse = $json;\n\nlet message = '';\nlet error = null;\n\n// Извлекаем сообщение из ответа OpenAI\nif (openAiResponse.statusCode === 200 && openAiResponse.body?.choices?.[0]?.message?.content) {\n  message = openAiResponse.body.choices[0].message.content.trim();\n} else {\n  error = openAiResponse.error || 'Failed to generate message';\n  // Fallback сообщение\n  message = `Привет! 👋 Я из Dark Project Arena. Заметил твой клуб в ${context.city}. У нас есть отличное предложение по игровой периферии${context.isChain ? ' со специальными условиями для сетей' : ''}. Можем обсудить?`;\n}\n\n// Проверяем длину сообщения\nif (message.length > 400) {\n  message = message.substring(0, 397) + '...';\n}\n\nconst output = {\n  context,\n  message,\n  generatedAt: new Date().toISOString(),\n  error\n};\n\nconsole.log(`Generated message for ${context.clubName}: ${message.length} chars`);\n\nreturn [{ json: output }];"
+      }
+    },
+    {
+      "id": "send-telegram-001",
+      "name": "Send Telegram Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2660, 250],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.context.telegram }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_notification": false,
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "📞 Позвонить",
+                  "callback_data": "call_me_{{$json.context.leadId}}"
+                },
+                {
+                  "text": "📅 Встреча",
+                  "callback_data": "meeting_{{$json.context.leadId}}"
+                }
+              ],
+              [
+                {
+                  "text": "📄 Прайс",
+                  "callback_data": "price_{{$json.context.leadId}}"
+                },
+                {
+                  "text": "❌ Не интересно",
+                  "callback_data": "not_interested_{{$json.context.leadId}}"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "update-last-contact-001",
+      "name": "Update Last Contact",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2860, 250],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `last_contact:lead:${$json.context.leadId}` }}",
+        "value": "={{ new Date().toISOString() }}",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "update-lead-001",
+      "name": "Update Lead",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [3060, 250],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.context.leadId }}",
+        "updateFields": {
+          "UF_CRM_CONTACT_COUNT": "={{ ($json.context.contactCount || 0) + 1 }}",
+          "UF_CRM_LAST_CONTACT": "={{ new Date().toISOString() }}",
+          "COMMENTS": "={{ $json.context.comments + '\\n\\n[' + new Date().toISOString() + '] Отправлено сообщение №' + (($json.context.contactCount || 0) + 1) + ' через ' + ($json.context.telegram ? 'Telegram' : 'Email') }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "log-activity-001",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [3260, 250],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `sales_activity:${$json.context.leadId}:${Date.now()}` }}",
+        "value": "={{ JSON.stringify({ ...$ json, activityType: 'message_sent' }) }}",
+        "expire": true,
+        "ttl": 7776000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "too-soon-handler-001",
+      "name": "Too Soon Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 450],
+      "parameters": {
+        "functionCode": "const context = $json.context;\n\nconst output = {\n  success: false,\n  reason: 'too_soon',\n  leadId: context.leadId,\n  clubName: context.clubName,\n  hoursSinceLastContact: context.hoursSinceLastContact,\n  minIntervalHours: context.minIntervalHours,\n  nextContactTime: new Date(Date.now() + (context.minIntervalHours - context.hoursSinceLastContact) * 60 * 60 * 1000).toISOString()\n};\n\nconsole.log(`Skipping contact for ${context.clubName}: too soon (${context.hoursSinceLastContact}h < ${context.minIntervalHours}h)`);\n\nreturn [{ json: output }];"
+      }
+    },
+    {
+      "id": "complete-001",
+      "name": "Complete",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [3460, 350],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 700],
+      "parameters": {}
+    },
+    {
+      "id": "handle-error-001",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 700],
+      "parameters": {
+        "functionCode": "const error = {\n  workflow: 'WF-04 Sales Nurture',\n  timestamp: new Date().toISOString(),\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  leadId: $node['Check Contact Frequency']?.json?.context?.leadId || 'Unknown'\n};\n\nconsole.error('WF-04 Error:', error);\n\nreturn [{ json: error }];"
+      }
+    },
+    {
+      "id": "save-error-001",
+      "name": "Save Error",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [660, 700],
+      "parameters": {
+        "operation": "push",
+        "list": "errors:sales_nurture",
+        "messageData": "={{ JSON.stringify($json) }}",
+        "pushType": "lpush",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Bitrix24 Lead Status": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Check Lead Status", "type": "main", "index": 0}]]
+    },
+    "Check Lead Status": {
+      "main": [
+        [{"node": "Get Lead Details", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Get Lead Details": {
+      "main": [[{"node": "Check Last Contact Time", "type": "main", "index": 0}]]
+    },
+    "Check Last Contact Time": {
+      "main": [[{"node": "Check Contact Frequency", "type": "main", "index": 0}]]
+    },
+    "Check Contact Frequency": {
+      "main": [[{"node": "Route by Frequency", "type": "main", "index": 0}]]
+    },
+    "Route by Frequency": {
+      "main": [
+        [{"node": "Prepare RAG Query", "type": "main", "index": 0}],
+        [{"node": "Too Soon Handler", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare RAG Query": {
+      "main": [[{"node": "Vector Search Qdrant", "type": "main", "index": 0}]]
+    },
+    "Vector Search Qdrant": {
+      "ai_embedding": [[{"node": "OpenAI Embeddings", "type": "ai_embedding", "index": 0}]],
+      "main": [[{"node": "Prepare LLM Prompt", "type": "main", "index": 0}]]
+    },
+    "Prepare LLM Prompt": {
+      "main": [[{"node": "Generate Message", "type": "main", "index": 0}]]
+    },
+    "Generate Message": {
+      "main": [[{"node": "Parse Message", "type": "main", "index": 0}]]
+    },
+    "Parse Message": {
+      "main": [[{"node": "Send Telegram Message", "type": "main", "index": 0}]]
+    },
+    "Send Telegram Message": {
+      "main": [[{"node": "Update Last Contact", "type": "main", "index": 0}]]
+    },
+    "Update Last Contact": {
+      "main": [[{"node": "Update Lead", "type": "main", "index": 0}]]
+    },
+    "Update Lead": {
+      "main": [[{"node": "Log Activity", "type": "main", "index": 0}]]
+    },
+    "Log Activity": {
+      "main": [[{"node": "Complete", "type": "main", "index": 0}]]
+    },
+    "Too Soon Handler": {
+      "main": [[{"node": "Complete", "type": "main", "index": 1}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
+    },
+    "Handle Error": {
+      "main": [[{"node": "Save Error", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120,
+    "timezone": "Europe/Moscow"
+  },
+  "version": 2,
+  "id": "wf-04-sales-nurture",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Sales nurturing with RAG using Qdrant vector store, GPT-4 personalization, and contact frequency control",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "6",
+      "name": "sales"
+    },
+    {
+      "id": "8",
+      "name": "ai"
+    }
+  ]
+}

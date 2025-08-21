@@ -1,0 +1,286 @@
+{
+  "name": "WF-00 Orchestrator",
+  "nodes": [
+    {
+      "id": "cron-001",
+      "name": "Waves Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            { "mode": "custom", "cronExpression": "0 2 * * *" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "load-csv-001",
+      "name": "Read Geo Targets CSV",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [460, 200],
+      "parameters": {
+        "filePath": "/workspace/projects/dark-project-arena/data/geo_targets.csv"
+      }
+    },
+    {
+      "id": "parse-csv-001",
+      "name": "Extract From CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "parameters": {
+        "operation": "fromFile",
+        "fileFormat": "csv",
+        "options": {
+          "headerRow": true,
+          "delimiter": ",",
+          "fromLine": 1,
+          "maxRows": -1,
+          "enableBOM": false,
+          "includeEmptyCells": false
+        }
+      }
+    },
+    {
+      "id": "filter-wave-001",
+      "name": "Filter Current Wave",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "wave1",
+              "leftValue": "={{ $json.priority_wave }}",
+              "rightValue": "1",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "split-001",
+      "name": "Split Cities",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1060, 200],
+      "parameters": { 
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-rate-limit-001",
+      "name": "Rate Limit Delay",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1260, 200],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "exec-wf01-001",
+      "name": "Run WF-01 per City",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1460, 200],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.WF_01_WORKFLOW_ID }}",
+        "waitForSubWorkflow": false
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "check-exec-error-001",
+      "name": "Check Execution Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1660, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasError",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "log-error-001",
+      "name": "Log Execution Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1860, 100],
+      "parameters": {
+        "functionCode": "const city = $node['Split Cities'].json.city;\nconst error = $json.error;\nconsole.error(`Failed to process city ${city}:`, error);\n\n// Save error to Redis for monitoring\nreturn [{\n  json: {\n    errorType: 'WF-01-EXECUTION',\n    city: city,\n    error: error?.message || 'Unknown error',\n    timestamp: new Date().toISOString(),\n    willRetry: true\n  }\n}];"
+      }
+    },
+    {
+      "id": "save-error-redis-001",
+      "name": "Save Error to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2060, 100],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `error:${$json.errorType}:${$json.city}:${Date.now()}` }}",
+        "value": "={{ JSON.stringify($json) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "continue-processing-001",
+      "name": "Continue Processing",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1860, 300],
+      "parameters": {}
+    },
+    {
+      "id": "notify-001",
+      "name": "Notify Wave Complete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1260, 400],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `✅ WF-00 Orchestrator: wave processed at ${new Date().toISOString()}` }}"
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 600],
+      "parameters": {}
+    },
+    {
+      "id": "error-notify-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [460, 600],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `❌ WF-00 Error: ${$json.error?.message || 'Unknown'}\\n\\nWorkflow: ${$json.workflow?.name}\\nNode: ${$json.node?.name}\\nTime: ${new Date().toISOString()}` }}"
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Waves Schedule": {
+      "main": [[{"node": "Read Geo Targets CSV", "type": "main", "index": 0}]]
+    },
+    "Read Geo Targets CSV": {
+      "main": [[{"node": "Extract From CSV", "type": "main", "index": 0}]]
+    },
+    "Extract From CSV": {
+      "main": [[{"node": "Filter Current Wave", "type": "main", "index": 0}]]
+    },
+    "Filter Current Wave": {
+      "main": [
+        [{"node": "Split Cities", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Split Cities": {
+      "main": [
+        [{"node": "Rate Limit Delay", "type": "main", "index": 0}],
+        [{"node": "Notify Wave Complete", "type": "main", "index": 0}]
+      ]
+    },
+    "Rate Limit Delay": {
+      "main": [[{"node": "Run WF-01 per City", "type": "main", "index": 0}]]
+    },
+    "Run WF-01 per City": {
+      "main": [[{"node": "Check Execution Error", "type": "main", "index": 0}]]
+    },
+    "Check Execution Error": {
+      "main": [
+        [{"node": "Log Execution Error", "type": "main", "index": 0}],
+        [{"node": "Continue Processing", "type": "main", "index": 0}]
+      ]
+    },
+    "Log Execution Error": {
+      "main": [[{"node": "Save Error to Redis", "type": "main", "index": 0}]]
+    },
+    "Save Error to Redis": {
+      "main": [[{"node": "Continue Processing", "type": "main", "index": 0}]]
+    },
+    "Continue Processing": {
+      "main": [[{"node": "Split Cities", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "version": 2,
+  "id": "wf-00-orchestrator",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Orchestrates geo waves and runs WF-01 per city with rate limiting and error handling",
+    "version": "0.0.2"
+  },
+  "tags": []
+}

@@ -106,6 +106,17 @@
       }
     },
     {
+      "id": "wait-before-yandex-001",
+      "name": "Rate Limit Wait Yandex",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      }
+    },
+    {
       "id": "http-yandex-001",
       "name": "Fetch Yandex Maps",
       "type": "n8n-nodes-base.httpRequest",
@@ -145,6 +156,17 @@
       },
       "credentials": {},
       "continueOnFail": true
+    },
+    {
+      "id": "wait-before-2gis-001",
+      "name": "Rate Limit Wait 2GIS",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [900, 500],
+      "parameters": {
+        "amount": 1,
+        "unit": "seconds"
+      }
     },
     {
       "id": "http-2gis-001", 
@@ -194,6 +216,44 @@
       },
       "credentials": {},
       "continueOnFail": true
+    },
+    {
+      "id": "check-api-responses-001",
+      "name": "Check API Responses",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasValidData",
+              "leftValue": "={{ !!($node['Fetch Yandex Maps'].json?.features || $node['Fetch 2GIS'].json?.result?.items) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "log-api-error-001",
+      "name": "Log API Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1500, 100],
+      "parameters": {
+        "functionCode": "const city = $node['Cities Data'].json.city;\nconst yandexError = $node['Fetch Yandex Maps'].json?.error;\nconst twoGisError = $node['Fetch 2GIS'].json?.error;\n\nconst errorLog = {\n  city: city,\n  timestamp: new Date().toISOString(),\n  yandexError: yandexError || 'No response',\n  twoGisError: twoGisError || 'No response',\n  message: 'Failed to fetch data from APIs'\n};\n\nconsole.error('API Error for city:', city, errorLog);\nreturn [{ json: errorLog }];"
+      }
     },
     {
       "id": "2gis-paging-001",

@@ -1,0 +1,469 @@
+{
+  "name": "WF-02 Enrich Contact Info",
+  "nodes": [
+    {
+      "id": "redis-trigger-001",
+      "name": "Redis Key Event",
+      "type": "n8n-nodes-base.redisTrigger",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "parameters": {
+        "triggerMode": "pattern",
+        "keyPattern": "club:*",
+        "events": [
+          "set"
+        ]
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "exec-trigger-001",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {}
+    },
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "get-club-data-001",
+      "name": "Get Club Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 400],
+      "parameters": {
+        "functionCode": "// Извлекаем данные клуба в зависимости от триггера\nlet clubData = null;\nlet clubKey = null;\n\n// Redis trigger - получаем ключ из события\nif ($json.key) {\n  clubKey = $json.key;\n  console.log(`Redis trigger: processing key ${clubKey}`);\n} \n// Execute workflow или manual trigger - данные переданы напрямую\nelse if ($json.club) {\n  clubData = $json.club;\n  console.log(`Direct trigger: processing ${clubData.name}`);\n} \n// Fallback\nelse {\n  throw new Error('No club data provided');\n}\n\n// Если нужно загрузить данные из Redis\nif (clubKey && !clubData) {\n  // Здесь должна быть Redis нода для получения данных\n  // Но для упрощения возвращаем ключ для следующей ноды\n  return [{ json: { clubKey, needsRedisLoad: true } }];\n}\n\nreturn [{ json: { club: clubData, startTime: Date.now() } }];"
+      }
+    },
+    {
+      "id": "load-from-redis-001",
+      "name": "Load Club from Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [860, 300],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json.clubKey }}",
+        "propertyName": "clubData"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "check-redis-load-001",
+      "name": "Check Redis Load",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needsRedisLoad",
+              "leftValue": "={{ $json.needsRedisLoad }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "parse-club-data-001",
+      "name": "Parse Club Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1060, 400],
+      "parameters": {
+        "functionCode": "// Парсим данные клуба из Redis или прямой передачи\nlet club = null;\n\nif ($json.clubData) {\n  // Данные из Redis\n  try {\n    club = JSON.parse($json.clubData);\n  } catch (e) {\n    throw new Error('Invalid club data in Redis: ' + e.message);\n  }\n} else if ($json.club) {\n  // Данные переданы напрямую\n  club = $json.club;\n} else {\n  throw new Error('No club data available');\n}\n\nif (!club.name || !club.city) {\n  throw new Error('Invalid club data: missing name or city');\n}\n\nconsole.log(`Starting enrichment for ${club.name} in ${club.city}`);\n\nreturn [{ json: { club, startTime: Date.now() } }];"
+      }
+    },
+    {
+      "id": "merge-data-sources-001",
+      "name": "Merge Data Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1260, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "check-url-001",
+      "name": "Check if URL Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1460, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasUrl",
+              "leftValue": "={{ $json.club.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "rate-limit-scrape-001",
+      "name": "Rate Limit Before Scrape",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1660, 300],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "http-scrape-001",
+      "name": "Scrape Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1860, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.club.url }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "html-extract-001",
+      "name": "Extract Contacts from HTML",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [2060, 300],
+      "parameters": {
+        "extractionValues": {
+          "values": [
+            {
+              "key": "emails",
+              "cssSelector": "a[href^='mailto:']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "phones",
+              "cssSelector": "a[href^='tel:']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "telegram",
+              "cssSelector": "a[href*='t.me/'], a[href*='telegram.me/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "vk",
+              "cssSelector": "a[href*='vk.com/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "instagram",
+              "cssSelector": "a[href*='instagram.com/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "enrichment-logic-001",
+      "name": "Enrichment Logic",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2260, 400],
+      "parameters": {
+        "functionCode": "// Get original club data\nconst club = $node['Merge Data Sources'].json.club || $node['Parse Club Data'].json.club;\n\n// Initialize enriched data\nconst enrichedClub = {\n  ...club,\n  enrichedAt: new Date().toISOString(),\n  enrichmentSource: 'WF-02'\n};\n\n// Check if we have scraping results\nconst extractedNode = $node['Extract Contacts from HTML'];\nif (extractedNode && extractedNode.json) {\n  const extracted = extractedNode.json;\n  \n  // Process emails\n  if (extracted.emails && extracted.emails.length > 0) {\n    const emails = extracted.emails.map(e => e.replace('mailto:', '').trim());\n    if (!enrichedClub.email) {\n      enrichedClub.email = emails[0];\n    }\n    enrichedClub.additionalEmails = emails.slice(1);\n  }\n  \n  // Process phones\n  if (extracted.phones && extracted.phones.length > 0) {\n    const phones = extracted.phones.map(p => p.replace('tel:', '').replace(/[^0-9+]/g, ''));\n    if (!enrichedClub.phone) {\n      enrichedClub.phone = phones[0];\n    }\n    enrichedClub.scrapedPhones = phones;\n  }\n  \n  // Process social media\n  if (extracted.telegram && extracted.telegram.length > 0) {\n    enrichedClub.telegram = extracted.telegram[0];\n  }\n  if (extracted.vk && extracted.vk.length > 0) {\n    enrichedClub.vk = extracted.vk[0];\n  }\n  if (extracted.instagram && extracted.instagram.length > 0) {\n    enrichedClub.instagram = extracted.instagram[0];\n  }\n  \n  enrichedClub.scrapeSuccess = true;\n} else {\n  enrichedClub.scrapeSuccess = false;\n}\n\n// Add relevance scoring based on categories\nif (club.categories && club.categories.includes('компьютер')) {\n  enrichedClub.relevanceScore = 10;\n} else if (club.categories && club.categories.includes('игр')) {\n  enrichedClub.relevanceScore = 8;\n} else {\n  enrichedClub.relevanceScore = 5;\n}\n\n// Add chain detection and priority logic\nif (club.isChain || (club.branchCount && club.branchCount > 1)) {\n  enrichedClub.priority = 'high';\n  enrichedClub.estimatedPCs = (club.branchCount || 1) * 20;\n} else {\n  enrichedClub.priority = 'medium';\n  enrichedClub.estimatedPCs = 15;\n}\n\n// Calculate lead score\nenrichedClub.leadScore = enrichedClub.relevanceScore * (enrichedClub.isChain ? 2 : 1);\n\nreturn [{ json: { enrichedClub } }];"
+      }
+    },
+    {
+      "id": "prepare-crm-data-001",
+      "name": "Prepare CRM Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2460, 400],
+      "parameters": {
+        "functionCode": "const enrichedClub = $json.enrichedClub;\nconst runId = $json.runId || enrichedClub.runId || `enrich_${Date.now()}`;\n\n// Prepare data for CRM\nconst crmData = {\n  enrichedClub: enrichedClub,\n  runId: runId,\n  leadData: {\n    title: enrichedClub.name,\n    phone: enrichedClub.phone || '',\n    email: enrichedClub.email || '',\n    address: enrichedClub.address,\n    city: enrichedClub.city,\n    region: enrichedClub.region,\n    source: enrichedClub.source,\n    telegram: enrichedClub.telegram || '',\n    vk: enrichedClub.vk || '',\n    instagram: enrichedClub.instagram || '',\n    website: enrichedClub.url || '',\n    isChain: enrichedClub.isChain || false,\n    brand: enrichedClub.brand || '',\n    branchCount: enrichedClub.branchCount || 1,\n    coordinates: enrichedClub.coordinates,\n    workingHours: enrichedClub.workingHours || '',\n    priority: enrichedClub.priority,\n    relevanceScore: enrichedClub.relevanceScore,\n    estimatedPCs: enrichedClub.estimatedPCs,\n    leadScore: enrichedClub.leadScore\n  }\n};\n\nconsole.log(`Prepared CRM data for ${crmData.leadData.title}`);\n\nreturn [{ json: crmData }];"
+      }
+    },
+    {
+      "id": "exec-wf03-001",
+      "name": "Execute WF-03",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2660, 400],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.WF_03_WORKFLOW_ID }}",
+        "waitForSubWorkflow": true
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "redis-save-enriched-001",
+      "name": "Save Enriched to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2860, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `enriched_club:${$json.enrichedClub.city.replace(/\\s+/g, '_')}:${$json.enrichedClub.name.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_')}` }}",
+        "value": "={{ JSON.stringify($json.enrichedClub) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "check-crm-result-001",
+      "name": "Check CRM Result",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3060, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "crmSuccess",
+              "leftValue": "={{ $node['Execute WF-03'].json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "done-001",
+      "name": "Done",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3260, 400],
+      "parameters": {
+        "functionCode": "const enrichedClub = $node['Prepare CRM Data'].json.enrichedClub;\nconst crmResult = $node['Execute WF-03'].json;\n\nconst output = {\n  success: true,\n  clubName: enrichedClub.name,\n  city: enrichedClub.city,\n  enriched: {\n    email: !!enrichedClub.email,\n    telegram: !!enrichedClub.telegram,\n    vk: !!enrichedClub.vk,\n    instagram: !!enrichedClub.instagram,\n    scrapeSuccess: enrichedClub.scrapeSuccess\n  },\n  crmId: crmResult.leadId || null,\n  timestamp: new Date().toISOString()\n};\n\nconsole.log(`WF-02 completed for ${output.clubName}`);\n\nreturn [{ json: output }];"
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 700],
+      "parameters": {}
+    },
+    {
+      "id": "handle-error-001",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 700],
+      "parameters": {
+        "functionCode": "const error = $json.error;\nconst club = $node['Parse Club Data']?.json?.club || $node['Get Club Data']?.json?.club || {};\n\nconst errorLog = {\n  workflow: 'WF-02 Enrich Contact Info',\n  clubName: club.name || 'Unknown',\n  city: club.city || 'Unknown',\n  error: error?.message || 'Unknown error',\n  node: error?.node?.name || 'Unknown',\n  timestamp: new Date().toISOString()\n};\n\nconsole.error('WF-02 Error:', errorLog);\n\nreturn [{ json: errorLog }];"
+      }
+    },
+    {
+      "id": "save-error-001",
+      "name": "Save Error to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [660, 700],
+      "parameters": {
+        "operation": "push",
+        "list": "errors:enrichment",
+        "messageData": "={{ JSON.stringify($json) }}",
+        "pushType": "lpush",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Redis Key Event": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 2}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Get Club Data", "type": "main", "index": 0}]]
+    },
+    "Get Club Data": {
+      "main": [[{"node": "Check Redis Load", "type": "main", "index": 0}]]
+    },
+    "Check Redis Load": {
+      "main": [
+        [{"node": "Load Club from Redis", "type": "main", "index": 0}],
+        [{"node": "Merge Data Sources", "type": "main", "index": 1}]
+      ]
+    },
+    "Load Club from Redis": {
+      "main": [[{"node": "Parse Club Data", "type": "main", "index": 0}]]
+    },
+    "Parse Club Data": {
+      "main": [[{"node": "Merge Data Sources", "type": "main", "index": 0}]]
+    },
+    "Merge Data Sources": {
+      "main": [[{"node": "Check if URL Exists", "type": "main", "index": 0}]]
+    },
+    "Check if URL Exists": {
+      "main": [
+        [{"node": "Rate Limit Before Scrape", "type": "main", "index": 0}],
+        [{"node": "Enrichment Logic", "type": "main", "index": 0}]
+      ]
+    },
+    "Rate Limit Before Scrape": {
+      "main": [[{"node": "Scrape Website", "type": "main", "index": 0}]]
+    },
+    "Scrape Website": {
+      "main": [[{"node": "Extract Contacts from HTML", "type": "main", "index": 0}]]
+    },
+    "Extract Contacts from HTML": {
+      "main": [[{"node": "Enrichment Logic", "type": "main", "index": 0}]]
+    },
+    "Enrichment Logic": {
+      "main": [[{"node": "Prepare CRM Data", "type": "main", "index": 0}]]
+    },
+    "Prepare CRM Data": {
+      "main": [[{"node": "Execute WF-03", "type": "main", "index": 0}]]
+    },
+    "Execute WF-03": {
+      "main": [[{"node": "Save Enriched to Redis", "type": "main", "index": 0}]]
+    },
+    "Save Enriched to Redis": {
+      "main": [[{"node": "Check CRM Result", "type": "main", "index": 0}]]
+    },
+    "Check CRM Result": {
+      "main": [
+        [{"node": "Done", "type": "main", "index": 0}],
+        [{"node": "Done", "type": "main", "index": 0}]
+      ]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
+    },
+    "Handle Error": {
+      "main": [[{"node": "Save Error to Redis", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 180,
+    "timezone": "Europe/Moscow"
+  },
+  "version": 2,
+  "id": "wf-02-enrich-contact-info",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Enriches club contact info with Redis Key Event trigger, web scraping, and CRM integration",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "4",
+      "name": "enrichment"
+    }
+  ]
+}
