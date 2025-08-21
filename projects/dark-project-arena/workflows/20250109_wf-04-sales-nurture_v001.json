@@ -77,6 +77,18 @@
       }
     },
     {
+      "id": "retrieve-kb-001",
+      "name": "Retrieve KB Context",
+      "type": "n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [1060, 200],
+      "parameters": {
+        "mode": "retrieve",
+        "query": "={{ `${$json.context.clubName} ${$json.context.city} gaming club sales messaging` }}",
+        "topK": 3
+      }
+    },
+    {
       "id": "prepare-context-001",
       "name": "Prepare Context",
       "type": "n8n-nodes-base.set",
@@ -146,7 +158,7 @@
         "temperature": 0.7,
         "maxTokens": 500,
         "systemMessage": "Ты — Руководитель отдела продаж с 20-летним опытом в компьютерной периферии. Сторонник SPIN и Challenger-подходов. Коммуницируешь дружелюбно, по делу, на «ты», быстро приводишь выгоды, отрабатываешь возражения по методике Feel-Felt-Found, владеешь цифрами (ROI, LTV, маржа). Твоя цель — довести клиента до заказа, оставаясь экспертом-консультантом.\n\nТы продаешь периферию Dark Project серии «Арена» для компьютерных клубов. Ключевые преимущества:\n- Цена ниже конкурентов на 15-20%\n- Гарантия 2 года vs 1 год у конкурентов\n- Сервис в РФ\n- Специализация на киберспорт-аренах\n- Оптовые условия + бренд-материалы",
-        "messages": "={{ `Контекст:\nКомпьютерный клуб: ${$json.context.clubName}\nГород: ${$json.context.city}\nСеть: ${$json.context.isChain ? 'Да' : 'Нет'}\nСтатус лида: ${$json.context.status}\n\nЗадача: Составь персонализированное сообщение для первого/повторного контакта. Сообщение должно быть коротким (до 500 символов), дружелюбным и содержать конкретную выгоду. Если это сеть клубов - упомяни специальные условия для сетей.` }}",
+        "messages": "={{ `Контекст:\nКомпьютерный клуб: ${$json.context.clubName}\nГород: ${$json.context.city}\nСеть: ${$json.context.isChain ? 'Да' : 'Нет'}\nСтатус лида: ${$json.context.status}\nРелевантные факты (KB): ${( $json.documents || [] ).map(d => d.pageContent).join(' \n- ') || 'нет'}\n\nЗадача: Составь персонализированное сообщение для первого/повторного контакта. Сообщение должно быть коротким (до 500 символов), дружелюбным и содержать конкретную выгоду. Если это сеть клубов - упомяни специальные условия для сетей.` }}",
         "options": {}
       },
       "credentials": {
@@ -371,6 +383,17 @@
       ]
     },
     "Load Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "Retrieve KB Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve KB Context": {
       "main": [
         [
           {
