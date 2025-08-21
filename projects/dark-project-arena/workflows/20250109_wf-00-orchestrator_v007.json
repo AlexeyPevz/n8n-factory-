@@ -74,7 +74,7 @@
       "typeVersion": 1,
       "position": [1060, 450],
       "parameters": {
-        "fileSelector": "/workspace/projects/dark-project-arena/data/geo_targets.csv"
+        "fileSelector": "={{ $env.GEO_TARGETS_CSV_PATH || '/workspace/projects/dark-project-arena/data/geo_targets.csv' }}"
       }
     },
     {
@@ -90,7 +90,8 @@
           "delimiter": ",",
           "includeEmptyCells": false
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "filter-wave-001",
@@ -107,6 +108,12 @@
           },
           "conditions": [
             {
+              "id": "csvLoaded",
+              "leftValue": "={{ $node['Parse CSV'].json ? true : false }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            },
+            {
               "id": "waveMatch",
               "leftValue": "={{ $json.priority_wave }}",
               "rightValue": "={{ $node['Determine Current Wave'].json.currentWave }}",
@@ -120,6 +127,32 @@
         },
         "options": {}
       }
+    },
+    {
+      "id": "csv-missing-log-001",
+      "name": "CSV Missing Log",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 520],
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Geo targets CSV missing or unreadable', path: $env.GEO_TARGETS_CSV_PATH, timestamp: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "csv-missing-save-001",
+      "name": "Save CSV Error",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1660, 520],
+      "parameters": {
+        "operation": "push",
+        "list": "errors:orchestrator",
+        "messageData": "={{ JSON.stringify($json) }}",
+        "pushType": "lpush",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": { "redis": { "id": "REDIS_INTERNAL", "name": "Redis Internal" } }
     },
     {
       "id": "add-run-metadata-001",
@@ -467,8 +500,11 @@
     "Filter Wave Cities": {
       "main": [
         [{"node": "Add Run Metadata", "type": "main", "index": 0}],
-        []
+        [{"node": "CSV Missing Log", "type": "main", "index": 0}]
       ]
+    },
+    "CSV Missing Log": {
+      "main": [[{"node": "Save CSV Error", "type": "main", "index": 0}]]
     },
     "Add Run Metadata": {
       "main": [[{"node": "Sort by Population", "type": "main", "index": 0}]]

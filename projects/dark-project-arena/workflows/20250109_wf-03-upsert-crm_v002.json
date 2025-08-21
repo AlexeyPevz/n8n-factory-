@@ -116,6 +116,57 @@
       "continueOnFail": true
     },
     {
+      "id": "bitrix24-search-namecity-001",
+      "name": "Search Duplicate by Name+City",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1060, 500],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "filters": {
+          "filter": {
+            "TITLE": "={{ $node['Prepare Search'].json.searchName }}",
+            "ADDRESS_CITY": "={{ $node['Prepare Search'].json.enrichedClub.city }}"
+          }
+        },
+        "options": {
+          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "COMMENTS"],
+          "limit": 10
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {"id": "BITRIX24_CRM", "name": "Bitrix24 CRM"}
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "decide-fallback-search-001",
+      "name": "Need Fallback Search?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1260, 450],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {"id": "noResults", "leftValue": "={{ ($input.first().json || []).length || 0 }}", "rightValue": 0, "operator": {"type": "number", "operation": "equals"}},
+            {"id": "noPhone", "leftValue": "={{ !$node['Prepare Search'].json.searchPhone }}", "rightValue": true, "operator": {"type": "boolean", "operation": "true"}}
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "combine-dup-results-001",
+      "name": "Combine Duplicate Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1260, 520],
+      "parameters": {"mode": "combine", "combinationMode": "chooseBranch", "options": {}}
+    },
+    {
       "id": "check-duplicate-001",
       "name": "Check Duplicate",
       "type": "n8n-nodes-base.function",
@@ -316,6 +367,20 @@
       }
     },
     {
+      "id": "respond-invalid-webhook-001",
+      "name": "Respond Invalid Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1060, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
       "id": "error-trigger-001",
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
@@ -357,6 +422,18 @@
       "main": [[{"node": "Search Duplicate in Bitrix24", "type": "main", "index": 0}]]
     },
     "Search Duplicate in Bitrix24": {
+      "main": [[{"node": "Need Fallback Search?", "type": "main", "index": 0}]]
+    },
+    "Need Fallback Search?": {
+      "main": [
+        [{"node": "Search Duplicate by Name+City", "type": "main", "index": 0}],
+        [{"node": "Check Duplicate", "type": "main", "index": 0}]
+      ]
+    },
+    "Search Duplicate by Name+City": {
+      "main": [[{"node": "Combine Duplicate Results", "type": "main", "index": 0}]]
+    },
+    "Combine Duplicate Results": {
       "main": [[{"node": "Check Duplicate", "type": "main", "index": 0}]]
     },
     "Check Duplicate": {
@@ -395,6 +472,9 @@
         [{"node": "Return Data", "type": "main", "index": 0}]
       ]
     },
+    "Respond Invalid": {
+      "main": [[{"node": "Respond Invalid Webhook", "type": "main", "index": 0}]]
+    },
     "Error Trigger": {
       "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
     }
@@ -415,13 +495,7 @@
     "version": "1.0.0"
   },
   "tags": [
-    {
-      "id": "1",
-      "name": "production"
-    },
-    {
-      "id": "5",
-      "name": "crm"
-    }
+    { "id": "1", "name": "production" },
+    { "id": "5", "name": "crm" }
   ]
 }

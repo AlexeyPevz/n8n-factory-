@@ -129,11 +129,11 @@
               [
                 {
                   "text": "✅ Взял в работу",
-                  "callback_data": "take_lead_{{$json.leadId}}"
+                  "callback_data": "={{ `take_lead_${$json.leadId}` }}"
                 },
                 {
                   "text": "📞 Позвонить",
-                  "url": "tel:{{$json.phone}}"
+                  "url": "={{ `tel:${$json.phone}` }}"
                 }
               ]
             ]
@@ -155,7 +155,7 @@
       "position": [1460, 450],
       "parameters": {
         "sendTo": "={{ $env.SUPPLIER_EMAIL }}",
-        "subject": "🔥 Горячий лид: {{ $json.leadName }} - {{ $json.city }}",
+        "subject": "={{ `🔥 Горячий лид: ${$json.leadName} - ${$json.city}` }}",
         "emailType": "html",
         "message": "={{ `<h2>Горячий лид требует немедленного внимания!</h2>\\n<p><strong>Клуб:</strong> ${$json.leadName}<br>\\n<strong>Город:</strong> ${$json.city}<br>\\n<strong>Контакт:</strong> ${$json.contactName}<br>\\n<strong>Телефон:</strong> <a href='tel:${$json.phone}'>${$json.phone}</a><br>\\n<strong>Email:</strong> ${$json.email || 'Не указан'}<br>\\n<strong>Потенциал сделки:</strong> ${$json.dealPotential.toLocaleString('ru-RU')} руб<br>\\n<strong>Сеть:</strong> ${$json.isChain ? 'Да (' + $json.branchCount + ' филиалов)' : 'Нет'}</p>\\n\\n<h3>Коммерческое предложение:</h3>\\n<pre>${$json.documents.kp.content}</pre>\\n\\n<h3>Техническое задание:</h3>\\n<pre>${$json.documents.tz.content}</pre>\\n\\n<p style='color: red;'><strong>⚡ Необходимо связаться с клиентом в течение 2 часов!</strong></p>` }}",
         "options": {
@@ -221,13 +221,13 @@
       "parameters": {
         "resource": "task",
         "operation": "create",
-        "title": "Проверить статус горячего лида {{ $json.leadName }}",
+        "title": "={{ `Проверить статус горячего лида ${$json.leadName}` }}",
         "description": "={{ `Проверить результат передачи горячего лида поставщику.\\n\\nКлуб: ${$json.leadName}\\nГород: ${$json.city}\\nПотенциал: ${$json.dealPotential.toLocaleString('ru-RU')} руб\\n\\nСвязаться с поставщиком и узнать статус переговоров.` }}",
         "additionalFields": {
           "deadline": "={{ new Date(Date.now() + 24*60*60*1000).toISOString() }}",
           "responsible_id": "={{ $env.SALES_MANAGER_ID }}",
           "crm": {
-            "lead": ["{{ $json.leadId }}"]
+            "lead": ["={{ $json.leadId }}"]
           }
         }
       },
