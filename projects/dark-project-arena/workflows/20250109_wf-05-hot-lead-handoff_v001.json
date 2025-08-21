@@ -5,7 +5,7 @@
       "id": "webhook-trigger-001",
       "name": "Hot Lead Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 400],
       "parameters": {
         "httpMethod": "POST",
@@ -58,7 +58,7 @@
       "id": "prepare-handoff-data-001",
       "name": "Prepare Handoff Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [660, 500],
       "parameters": {
         "mode": "manual",
@@ -78,7 +78,7 @@
     {
       "id": "generate-proposal-001",
       "name": "Generate Commercial Proposal",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [860, 500],
       "parameters": {
@@ -110,7 +110,7 @@
       "id": "notify-supplier-telegram-001",
       "name": "Notify Supplier Telegram",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [1260, 400],
       "parameters": {
         "operation": "sendMessage",
@@ -147,7 +147,7 @@
       "id": "send-email-supplier-001",
       "name": "Send Email to Supplier",
       "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1260, 600],
       "parameters": {
         "sendTo": "={{ $env.SUPPLIER_EMAIL }}",
@@ -214,7 +214,7 @@
       "id": "webhook-response-001",
       "name": "Webhook Response",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [1860, 400],
       "parameters": {
         "respondWith": "json",
@@ -244,7 +244,7 @@
       "id": "notify-admin-error-001",
       "name": "Notify Admin Error",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [2260, 700],
       "parameters": {
         "operation": "sendMessage",

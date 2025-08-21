@@ -12,15 +12,15 @@
     {
       "id": "schedule-trigger-001",
       "name": "Daily Schedule",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
       "position": [260, 500],
       "parameters": {
-        "rule": {
-          "interval": [
+        "triggerTimes": {
+          "item": [
             {
-              "field": "cronExpression",
-              "expression": "0 3 * * *"
+              "mode": "custom",
+              "cronExpression": "0 3 * * *"
             }
           ]
         }
@@ -93,7 +93,7 @@
           "parameters": [
             {
               "name": "text",
-              "value": "={{$json.searchQuery}} {{$json.city}}"
+              "value": "={{ $json.searchQuery + ' ' + $json.city }}"
             },
             {
               "name": "type",
@@ -176,7 +176,7 @@
       "typeVersion": 1,
       "position": [1300, 400],
       "parameters": {
-        "functionCode": "const cityData = $('Cities Data').first().json;\nconst yandexData = $('Fetch Yandex Maps').first().json;\nconst twoGisData = $('Fetch 2GIS').first().json;\nconst clubs = [];\n\n// Parse Yandex results\nif (yandexData.features && Array.isArray(yandexData.features)) {\n  for (const feature of yandexData.features) {\n    const props = feature.properties || {};\n    const meta = props.CompanyMetaData || {};\n    const phones = (meta.Phones || []).map(p => p.formatted).filter(Boolean);\n    \n    clubs.push({\n      name: props.name || '',\n      address: props.address?.formatted || '',\n      phone: phones[0] || '',\n      additionalPhones: phones.slice(1),\n      city: cityData.city,\n      region: cityData.region,\n      source: 'YandexMaps',\n      coordinates: {\n        lat: feature.geometry?.coordinates?.[1] || 0,\n        lon: feature.geometry?.coordinates?.[0] || 0\n      },\n      url: meta.url || '',\n      workingHours: meta.Hours?.text || '',\n      categories: (meta.Categories || []).map(c => c.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Parse 2GIS results\nif (twoGisData.result?.items && Array.isArray(twoGisData.result.items)) {\n  for (const item of twoGisData.result.items) {\n    const contacts = {};\n    \n    // Extract contacts\n    for (const group of (item.contact_groups || [])) {\n      for (const contact of (group.contacts || [])) {\n        if (!contacts[contact.type]) {\n          contacts[contact.type] = [];\n        }\n        contacts[contact.type].push(contact.value);\n      }\n    }\n    \n    clubs.push({\n      name: item.name || '',\n      address: item.address_name || '',\n      phone: (contacts.phone || [])[0] || '',\n      additionalPhones: (contacts.phone || []).slice(1),\n      email: (contacts.email || [])[0] || '',\n      city: cityData.city,\n      region: cityData.region,\n      source: '2GIS',\n      isChain: (item.org?.branch_count || 0) > 1,\n      brand: item.org?.name || '',\n      branchCount: item.org?.branch_count || 1,\n      coordinates: {\n        lat: item.point?.lat || 0,\n        lon: item.point?.lon || 0\n      },\n      url: (contacts.website || [])[0] || '',\n      telegram: (contacts.telegram || [])[0] || '',\n      rubrics: (item.rubrics || []).map(r => r.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Deduplicate\nconst uniqueClubs = [];\nconst seen = new Set();\n\nfor (const club of clubs) {\n  if (club.name && club.address) {\n    const key = `${club.name.toLowerCase().trim()}_${club.address.toLowerCase().trim()}`;\n    if (!seen.has(key)) {\n      seen.add(key);\n      uniqueClubs.push(club);\n    }\n  }\n}\n\n// Return clubs for Redis save\nreturn uniqueClubs.map(club => ({\n  json: {\n    key: `club:${cityData.city.replace(/\\s+/g, '_')}:${club.name.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_')}`,\n    value: JSON.stringify(club),\n    ttl: 30 * 24 * 60 * 60,\n    club: club,\n    cityData: cityData\n  }\n}));"
+        "functionCode": "const cityData = $node[\"Cities Data\"].json;\nconst yandexData = $node[\"Fetch Yandex Maps\"].json;\nconst twoGisData = $node[\"Fetch 2GIS\"].json;\nconst clubs = [];\n\n// Parse Yandex results\nif (yandexData.features && Array.isArray(yandexData.features)) {\n  for (const feature of yandexData.features) {\n    const props = feature.properties || {};\n    const meta = props.CompanyMetaData || {};\n    const phones = (meta.Phones || []).map(p => p.formatted).filter(Boolean);\n    \n    clubs.push({\n      name: props.name || '',\n      address: props.address?.formatted || '',\n      phone: phones[0] || '',\n      additionalPhones: phones.slice(1),\n      city: cityData.city,\n      region: cityData.region,\n      source: 'YandexMaps',\n      coordinates: {\n        lat: feature.geometry?.coordinates?.[1] || 0,\n        lon: feature.geometry?.coordinates?.[0] || 0\n      },\n      url: meta.url || '',\n      workingHours: meta.Hours?.text || '',\n      categories: (meta.Categories || []).map(c => c.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Parse 2GIS results\nif (twoGisData.result?.items && Array.isArray(twoGisData.result.items)) {\n  for (const item of twoGisData.result.items) {\n    const contacts = {};\n    \n    // Extract contacts\n    for (const group of (item.contact_groups || [])) {\n      for (const contact of (group.contacts || [])) {\n        if (!contacts[contact.type]) {\n          contacts[contact.type] = [];\n        }\n        contacts[contact.type].push(contact.value);\n      }\n    }\n    \n    clubs.push({\n      name: item.name || '',\n      address: item.address_name || '',\n      phone: (contacts.phone || [])[0] || '',\n      additionalPhones: (contacts.phone || []).slice(1),\n      email: (contacts.email || [])[0] || '',\n      city: cityData.city,\n      region: cityData.region,\n      source: '2GIS',\n      isChain: (item.org?.branch_count || 0) > 1,\n      brand: item.org?.name || '',\n      branchCount: item.org?.branch_count || 1,\n      coordinates: {\n        lat: item.point?.lat || 0,\n        lon: item.point?.lon || 0\n      },\n      url: (contacts.website || [])[0] || '',\n      telegram: (contacts.telegram || [])[0] || '',\n      rubrics: (item.rubrics || []).map(r => r.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Deduplicate\nconst uniqueClubs = [];\nconst seen = new Set();\n\nfor (const club of clubs) {\n  if (club.name && club.address) {\n    const key = `${club.name.toLowerCase().trim()}_${club.address.toLowerCase().trim()}`;\n    if (!seen.has(key)) {\n      seen.add(key);\n      uniqueClubs.push(club);\n    }\n  }\n}\n\n// Return clubs for Redis save\nreturn uniqueClubs.map(club => ({\n  json: {\n    key: `club:${cityData.city.replace(/\\s+/g, '_')}:${club.name.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_')}`,\n    value: JSON.stringify(club),\n    ttl: 30 * 24 * 60 * 60,\n    club: club,\n    cityData: cityData\n  }\n}));"
       }
     },
     {
@@ -222,13 +222,13 @@
           "string": [
             {
               "name": "searchQuery",
-              "value": "={{$('Cities Data').first().json.searchQuery}}"
+              "value": "={{$node[\"Cities Data\"].json.searchQuery}}"
             }
           ],
           "number": [
             {
               "name": "cityIndex",
-              "value": "={{$('Cities Data').first().json.cityIndex + 1}}"
+              "value": "={{$node[\"Cities Data\"].json.cityIndex + 1}}"
             }
           ]
         },
@@ -266,7 +266,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{$env.TELEGRAM_ADMIN_CHAT_ID}}",
-        "text": "={\u007b`✅ WF-01 Fetch Gaming Clubs completed\\n\\nProcessed ${$json.totalCities} cities\\nCompleted at: ${new Date($json.completedAt).toLocaleString('ru-RU')}`\u007d}",
+        "text": "={{ `✅ WF-01 Fetch Gaming Clubs completed\\n\\nProcessed ${$json.totalCities} cities\\nCompleted at: ${new Date($json.completedAt).toLocaleString('ru-RU')}` }}",
         "additionalFields": {}
       },
       "credentials": {
@@ -294,7 +294,7 @@
         "resource": "message",
         "operation": "sendMessage",
         "chatId": "={{$env.TELEGRAM_ADMIN_CHAT_ID}}",
-        "text": "={\u007b`❌ Error in WF-01 Fetch Gaming Clubs\\n\\nError: ${$json.error?.message || 'Unknown error'}\\nNode: ${$json.error?.node?.name || 'Unknown'}\\nTime: ${new Date().toISOString()}`\u007d}",
+        "text": "={{ `❌ Error in WF-01 Fetch Gaming Clubs\\n\\nError: ${$json.error?.message || 'Unknown error'}\\nNode: ${$json.error?.node?.name || 'Unknown'}\\nTime: ${new Date().toISOString()}` }}",
         "additionalFields": {}
       },
       "credentials": {
@@ -477,6 +477,7 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "version": 2,
   "versionId": "01b6d63b-1212-4a56-8764-76e7ac6e3c1e",
   "id": "wf-01-fetch-gaming-clubs",
   "meta": {

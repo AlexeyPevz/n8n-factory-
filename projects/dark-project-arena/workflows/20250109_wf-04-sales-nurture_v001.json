@@ -22,7 +22,7 @@
       "id": "check-lead-status-001",
       "name": "Check Lead Status",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [460, 400],
       "parameters": {
         "conditions": {
@@ -68,7 +68,7 @@
     {
       "id": "load-knowledge-base-001",
       "name": "Load Knowledge Base",
-      "type": "n8n-nodes-base.vectorStoreInMemory",
+      "type": "n8n-nodes-langchain.vectorStoreQdrant",
       "typeVersion": 1,
       "position": [860, 200],
       "parameters": {
@@ -80,7 +80,7 @@
       "id": "prepare-context-001",
       "name": "Prepare Context",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [860, 400],
       "parameters": {
         "mode": "manual",
@@ -111,7 +111,7 @@
       "id": "if-should-contact-001",
       "name": "Should Contact?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1260, 400],
       "parameters": {
         "conditions": {
@@ -138,7 +138,7 @@
     {
       "id": "generate-message-001",
       "name": "Generate Sales Message",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [1460, 300],
       "parameters": {
@@ -160,7 +160,7 @@
       "id": "send-telegram-001",
       "name": "Send Telegram Message",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [1660, 300],
       "parameters": {
         "operation": "sendMessage",
@@ -247,7 +247,7 @@
       "id": "telegram-callback-trigger-001",
       "name": "Telegram Callback Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 700],
       "parameters": {
         "updates": ["callback_query"]
@@ -293,7 +293,7 @@
       "id": "handle-interested-001",
       "name": "Handle Interested",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [660, 600],
       "parameters": {
         "source": "database",
@@ -305,7 +305,7 @@
       "id": "send-price-list-001",
       "name": "Send Price List",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
         "operation": "sendDocument",

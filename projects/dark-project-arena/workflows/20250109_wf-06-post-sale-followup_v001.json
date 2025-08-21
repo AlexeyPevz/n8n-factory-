@@ -63,7 +63,7 @@
       "id": "prepare-followup-data-001",
       "name": "Prepare Followup Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3,
       "position": [860, 400],
       "parameters": {
         "mode": "manual",
@@ -74,7 +74,7 @@
               "id": "followupData",
               "name": "followupData",
               "type": "object",
-              "value": "={{ {\n  dealId: $('Get Deal Details').item.json.ID,\n  dealAmount: $('Get Deal Details').item.json.OPPORTUNITY,\n  clubName: $('Get Deal Details').item.json.TITLE,\n  closeDate: $('Get Deal Details').item.json.CLOSEDATE,\n  contactName: $json.NAME || '',\n  contactPhone: $json.PHONE?.[0]?.VALUE || '',\n  contactEmail: $json.EMAIL?.[0]?.VALUE || '',\n  contactTelegram: $json.IM?.[0]?.VALUE || $json.UF_TELEGRAM || ''\n} }}"
+              "value": "={{ {\n  dealId: $node['Get Deal Details'].json.ID,\n  dealAmount: $node['Get Deal Details'].json.OPPORTUNITY,\n  clubName: $node['Get Deal Details'].json.TITLE,\n  closeDate: $node['Get Deal Details'].json.CLOSEDATE,\n  contactName: $json.NAME || '',\n  contactPhone: $json.PHONE?.[0]?.VALUE || '',\n  contactEmail: $json.EMAIL?.[0]?.VALUE || '',\n  contactTelegram: $json.IM?.[0]?.VALUE || $json.UF_TELEGRAM || ''\n} }}"
             }
           ]
         }
@@ -105,7 +105,7 @@
       "id": "wait-until-date-001",
       "name": "Wait Until Followup Date",
       "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [1460, 400],
       "parameters": {
         "resume": "date",
@@ -116,7 +116,7 @@
     {
       "id": "generate-followup-message-001",
       "name": "Generate Followup Message",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [1660, 400],
       "parameters": {
@@ -138,7 +138,7 @@
       "id": "send-followup-telegram-001",
       "name": "Send Followup Telegram",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [1860, 300],
       "parameters": {
         "operation": "sendMessage",
@@ -186,7 +186,7 @@
       "id": "send-followup-email-001",
       "name": "Send Followup Email",
       "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [1860, 500],
       "parameters": {
         "sendTo": "={{ $json.contactEmail }}",
@@ -237,7 +237,7 @@
       "id": "check-more-followups-001",
       "name": "Check More Followups",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [2260, 400],
       "parameters": {
         "conditions": {
@@ -265,7 +265,7 @@
       "id": "telegram-feedback-trigger-001",
       "name": "Telegram Feedback Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1,
       "position": [260, 800],
       "parameters": {
         "updates": ["callback_query"]
@@ -316,7 +316,7 @@
       "id": "handle-positive-feedback-001",
       "name": "Handle Positive Feedback",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
         "operation": "sendMessage",
@@ -335,7 +335,7 @@
       "id": "handle-questions-problems-001",
       "name": "Handle Questions/Problems",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [660, 900],
       "parameters": {
         "operation": "sendMessage",

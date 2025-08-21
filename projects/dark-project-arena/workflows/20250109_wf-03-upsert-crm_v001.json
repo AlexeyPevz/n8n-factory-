@@ -49,7 +49,7 @@
       "position": [860, 300],
       "parameters": {
         "method": "POST",
-        "url": "={{$credentials.domain}}/rest/crm.lead.list",
+        "url": "={{$env.BITRIX24_DOMAIN}}/rest/crm.lead.list",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpQueryAuth",
         "sendQuery": true,
@@ -71,12 +71,7 @@
         },
         "options": {}
       },
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
-        }
-      }
+      "credentials": {}
     },
     {
       "id": "check-duplicate-001",
@@ -102,7 +97,7 @@
       "typeVersion": 1,
       "position": [1260, 200],
       "parameters": {
-        "functionCode": "const club = $('Prepare Search').first().json.enrichedClub;\n\n// Format phone array\nconst phones = [{\n  VALUE: club.phone,\n  VALUE_TYPE: 'WORK'\n}];\n\nif (club.additionalPhones && club.additionalPhones.length > 0) {\n  club.additionalPhones.forEach(phone => {\n    phones.push({\n      VALUE: phone,\n      VALUE_TYPE: 'WORK'\n    });\n  });\n}\n\n// Format email array\nconst emails = [];\nif (club.email) {\n  emails.push({\n    VALUE: club.email,\n    VALUE_TYPE: 'WORK'\n  });\n}\n\n// Build lead data\nconst leadData = {\n  fields: {\n    TITLE: club.name,\n    NAME: 'Владелец',\n    STATUS_ID: 'NEW',\n    SOURCE_ID: 'WEB',\n    SOURCE_DESCRIPTION: `${club.source} (${club.sources?.join(', ') || club.source})`,\n    ADDRESS: club.address,\n    ADDRESS_CITY: club.city,\n    ADDRESS_PROVINCE: club.region,\n    COMMENTS: `Компьютерный клуб\\n\\nИсточники: ${club.sources?.join(', ') || club.source}\\nСеть: ${club.isChain ? 'Да' : 'Нет'}\\nБренд: ${club.brand || 'Не указан'}\\nКоличество филиалов: ${club.branchCount || 1}\\n\\nКонтакты:\\nTelegram: ${club.telegram || 'Не найден'}\\nVK: ${club.vk || 'Не найден'}\\nInstagram: ${club.instagram || 'Не найден'}\\nWebsite: ${club.url || 'Не указан'}\\n\\nРабочие часы: ${club.workingHours || 'Не указаны'}\\nКатегории: ${club.categories || club.rubrics || 'Не указаны'}\\n\\nКоординаты: ${club.coordinates?.lat},${club.coordinates?.lon}\\nПриоритет: ${club.priority || 'medium'}\\nОценка релевантности: ${club.relevanceScore || 5}/10\\nОценка ПК: ${club.estimatedPCs || 15}`,\n    PHONE: phones,\n    EMAIL: emails,\n    UF_CRM_TELEGRAM: club.telegram || '',\n    UF_CRM_VK: club.vk || '',\n    UF_CRM_INSTAGRAM: club.instagram || '',\n    UF_CRM_WEBSITE: club.url || '',\n    UF_CRM_IS_CHAIN: club.isChain ? 'Y' : 'N',\n    UF_CRM_BRAND: club.brand || '',\n    UF_CRM_BRANCH_COUNT: club.branchCount || 1,\n    UF_CRM_COORDINATES: `${club.coordinates?.lat || 0},${club.coordinates?.lon || 0}`,\n    UF_CRM_PRIORITY: club.priority || 'medium',\n    UF_CRM_RELEVANCE_SCORE: club.relevanceScore || 5,\n    UF_CRM_ESTIMATED_PCS: club.estimatedPCs || 15,\n    UF_CRM_WORKING_HOURS: club.workingHours || '',\n    UF_CRM_ENRICHED_AT: club.enrichedAt || new Date().toISOString()\n  }\n};\n\nreturn [{ json: leadData }];"
+        "functionCode": "const club = $node[\"Prepare Search\"].json.enrichedClub;\n\n// Format phone array\nconst phones = [{ VALUE: club.phone, VALUE_TYPE: 'WORK' }];\nif (club.additionalPhones && club.additionalPhones.length > 0) {\n  club.additionalPhones.forEach(phone => {\n    phones.push({ VALUE: phone, VALUE_TYPE: 'WORK' });\n  });\n}\n\n// Format email array\nconst emails = [];\nif (club.email) {\n  emails.push({ VALUE: club.email, VALUE_TYPE: 'WORK' });\n}\n\n// Build lead data\nconst leadData = {\n  fields: {\n    TITLE: club.name,\n    NAME: 'Владелец',\n    STATUS_ID: 'NEW',\n    SOURCE_ID: 'WEB',\n    SOURCE_DESCRIPTION: `${club.source} (${club.sources?.join(', ') || club.source})`,\n    ADDRESS: club.address,\n    ADDRESS_CITY: club.city,\n    ADDRESS_PROVINCE: club.region,\n    COMMENTS: `Компьютерный клуб\\n\\nИсточники: ${club.sources?.join(', ') || club.source}\\nСеть: ${club.isChain ? 'Да' : 'Нет'}\\nБренд: ${club.brand || 'Не указан'}\\nКоличество филиалов: ${club.branchCount || 1}\\n\\nКонтакты:\\nTelegram: ${club.telegram || 'Не найден'}\\nVK: ${club.vk || 'Не найден'}\\nInstagram: ${club.instagram || 'Не найден'}\\nWebsite: ${club.url || 'Не указан'}\\n\\nРабочие часы: ${club.workingHours || 'Не указаны'}\\nКатегории: ${club.categories || club.rubrics || 'Не указаны'}\\n\\nКоординаты: ${club.coordinates?.lat},${club.coordinates?.lon}\\nПриоритет: ${club.priority || 'medium'}\\nОценка релевантности: ${club.relevanceScore || 5}/10\\nОценка ПК: ${club.estimatedPCs || 15}`\n  }\n};\n\n// Custom fields (conditionally)\nleadData.fields.PHONE = phones;\nif (emails.length) leadData.fields.EMAIL = emails;\nleadData.fields.UF_CRM_TELEGRAM = club.telegram || '';\nleadData.fields.UF_CRM_VK = club.vk || '';\nleadData.fields.UF_CRM_INSTAGRAM = club.instagram || '';\nleadData.fields.UF_CRM_WEBSITE = club.url || '';\nleadData.fields.UF_CRM_IS_CHAIN = club.isChain ? 'Y' : 'N';\nleadData.fields.UF_CRM_BRAND = club.brand || '';\nleadData.fields.UF_CRM_BRANCH_COUNT = club.branchCount || 1;\nleadData.fields.UF_CRM_COORDINATES = `${club.coordinates?.lat || 0},${club.coordinates?.lon || 0}`;\nleadData.fields.UF_CRM_PRIORITY = club.priority || 'medium';\nleadData.fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore || 5;\nleadData.fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs || 15;\nleadData.fields.UF_CRM_WORKING_HOURS = club.workingHours || '';\nleadData.fields.UF_CRM_ENRICHED_AT = club.enrichedAt || new Date().toISOString();\n\nreturn [{ json: leadData }];"
       }
     },
     {
@@ -112,7 +107,7 @@
       "typeVersion": 1,
       "position": [1260, 400],
       "parameters": {
-        "functionCode": "const club = $('Prepare Search').first().json.enrichedClub;\nconst existingLead = $('Search Duplicate in Bitrix24').first().json.result[0];\n\n// Build update data - only update fields that have new information\nconst updateData = {\n  id: existingLead.ID,\n  fields: {\n    STATUS_ID: existingLead.STATUS_ID === 'JUNK' ? 'NEW' : existingLead.STATUS_ID,\n    COMMENTS: `${existingLead.COMMENTS || ''}\\n\\n[${new Date().toISOString()}] Обновлено из WF-03\\nИсточники: ${club.sources?.join(', ') || club.source}\\nНовые данные:\\n- Telegram: ${club.telegram || 'Не найден'}\\n- VK: ${club.vk || 'Не найден'}\\n- Instagram: ${club.instagram || 'Не найден'}\\n- Email: ${club.email || 'Не найден'}\\n- Приоритет: ${club.priority || 'medium'}\\n- Оценка релевантности: ${club.relevanceScore || 5}/10`\n  }\n};\n\n// Only update fields if we have new data\nif (club.email) {\n  updateData.fields.EMAIL = [{ VALUE: club.email, VALUE_TYPE: 'WORK' }];\n}\n\nif (club.telegram) {\n  updateData.fields.UF_CRM_TELEGRAM = club.telegram;\n}\n\nif (club.vk) {\n  updateData.fields.UF_CRM_VK = club.vk;\n}\n\nif (club.instagram) {\n  updateData.fields.UF_CRM_INSTAGRAM = club.instagram;\n}\n\nif (club.priority) {\n  updateData.fields.UF_CRM_PRIORITY = club.priority;\n}\n\nif (club.relevanceScore) {\n  updateData.fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore;\n}\n\nif (club.estimatedPCs) {\n  updateData.fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs;\n}\n\nupdateData.fields.UF_CRM_ENRICHED_AT = club.enrichedAt || new Date().toISOString();\n\nreturn [{ json: updateData }];"
+        "functionCode": "const club = $node[\"Prepare Search\"].json.enrichedClub;\nconst searchResult = $node[\"Search Duplicate in Bitrix24\"].json;\nconst existing = Array.isArray(searchResult.result) ? searchResult.result[0] : null;\n\nconst updateData = { id: existing?.ID, fields: {} };\nif (existing?.STATUS_ID === 'JUNK') {\n  updateData.fields.STATUS_ID = 'NEW';\n}\nupdateData.fields.COMMENTS = `${existing?.COMMENTS || ''}\\n\\n[${new Date().toISOString()}] Обновлено из WF-03`;\n\nif (club.email) updateData.fields.EMAIL = [{ VALUE: club.email, VALUE_TYPE: 'WORK' }];\nif (club.telegram) updateData.fields.UF_CRM_TELEGRAM = club.telegram;\nif (club.vk) updateData.fields.UF_CRM_VK = club.vk;\nif (club.instagram) updateData.fields.UF_CRM_INSTAGRAM = club.instagram;\nif (club.priority) updateData.fields.UF_CRM_PRIORITY = club.priority;\nif (club.relevanceScore) updateData.fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore;\nif (club.estimatedPCs) updateData.fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs;\nupdateData.fields.UF_CRM_ENRICHED_AT = club.enrichedAt || new Date().toISOString();\n\nreturn [{ json: updateData }];"
       }
     },
     {
@@ -123,20 +118,13 @@
       "position": [1460, 200],
       "parameters": {
         "method": "POST",
-        "url": "={{$credentials.domain}}/rest/crm.lead.add",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "={{$env.BITRIX24_DOMAIN}}/rest/crm.lead.add",
         "sendBody": true,
-        "contentType": "json",
-        "body": "={{JSON.stringify($json)}}",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}",
         "options": {}
       },
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
-        }
-      }
+      "credentials": {}
     },
     {
       "id": "bitrix24-update-001",
@@ -146,20 +134,13 @@
       "position": [1460, 400],
       "parameters": {
         "method": "POST",
-        "url": "={{$credentials.domain}}/rest/crm.lead.update",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "={{$env.BITRIX24_DOMAIN}}/rest/crm.lead.update",
         "sendBody": true,
-        "contentType": "json",
-        "body": "={{JSON.stringify($json)}}",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}",
         "options": {}
       },
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
-        }
-      }
+      "credentials": {}
     },
     {
       "id": "merge-result-001",
@@ -169,7 +150,7 @@
       "position": [1660, 300],
       "parameters": {
         "mode": "combine",
-        "combinationMode": "multiplex",
+        "combinationMode": "mergeByPosition",
         "options": {}
       }
     },
@@ -180,7 +161,7 @@
       "typeVersion": 1,
       "position": [1860, 300],
       "parameters": {
-        "functionCode": "const isUpdate = $('Check if Duplicate Exists').first().json.result?.length > 0;\nconst result = items[0].json;\nconst club = $('Prepare Search').first().json.enrichedClub;\n\nlet leadId;\nif (isUpdate) {\n  leadId = $('Prepare Lead Update Data').first().json.id;\n} else {\n  leadId = result.result;\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: isUpdate ? 'updated' : 'created',\n    leadId: leadId,\n    clubName: club.name,\n    clubCity: club.city,\n    priority: club.priority,\n    relevanceScore: club.relevanceScore,\n    estimatedPCs: club.estimatedPCs,\n    enrichedFields: {\n      email: !!club.email,\n      telegram: !!club.telegram,\n      vk: !!club.vk,\n      instagram: !!club.instagram\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "functionCode": "const check = $node[\"Check if Duplicate Exists\"].json;\nconst isUpdate = !!(check && check.json && check.json.result && check.json.result.length > 0);\nconst result = items[0].json;\nconst club = $node[\"Prepare Search\"].json.enrichedClub;\n\nlet leadId;\nif (isUpdate) {\n  leadId = $node[\"Prepare Lead Update Data\"].json.id;\n} else {\n  leadId = result.result;\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: isUpdate ? 'updated' : 'created',\n    leadId,\n    clubName: club.name,\n    clubCity: club.city,\n    priority: club.priority,\n    relevanceScore: club.relevanceScore,\n    estimatedPCs: club.estimatedPCs,\n    enrichedFields: {\n      email: !!club.email,\n      telegram: !!club.telegram,\n      vk: !!club.vk,\n      instagram: !!club.instagram\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
       }
     },
     {
@@ -191,7 +172,7 @@
       "position": [2060, 300],
       "parameters": {
         "operation": "set",
-        "key": "={\u007b`crm_activity:${new Date().toISOString()}:${$json.leadId}`\u007d}",
+        "key": "={{ `crm_activity:${new Date().toISOString()}:${$json.leadId}` }}",
         "value": "={{JSON.stringify($json)}}",
         "keyType": "automatic",
         "expire": true,
@@ -416,6 +397,7 @@
     "saveManualExecutions": true,
     "callerPolicy": "workflowsFromSameOwner"
   },
+  "version": 2,
   "versionId": "e5f7g8h9-4343-5c21-ba98-10g8cd7e5f3g",
   "id": "wf-03-upsert-crm",
   "meta": {

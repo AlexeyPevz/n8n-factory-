@@ -20,6 +20,17 @@
 | Логика продаж | LLM (OpenAI/GPT-4o) + KB в векторном хранилище (Qdrant) | n8n-nodes-base.ollama / Custom Function |
 | Мониторинг | n8n Error Trigger + Telegram Alerts | IF • Error Branch |
 
+### 2.1. Оркестратор волн (WF-00 Orchestrator)
+- Роль: центральный хаб планирования и запуска «волн» городов
+- Источник таргетов: `projects/dark-project-arena/data/geo_targets.csv` (city, region, federal_district, population, lat, lon, country, club_presence_score, city_id_2gis/bbox, priority_wave)
+- Логика:
+  - Cron → выбор волны → постановка задач в Redis (List/Stream) с приоритетами
+  - Запуск `WF-01` пакетами (1 город = 1 итерация), контроль rate-limit и ретраев
+  - Телеметрия: корреляционный `runId`, прогресс, алерты через Telegram
+
+### 2.2. Геоволны (приоритезация городов)
+- Волна 1: миллионники РФ/СНГ; Волна 2: ЦФО ≥ 500k; Волна 3: СЗФО ≥ 500k; Волна 4: ПФО ≥ 500k; далее ЮФО/УФО/СФО/ДФО/СКФО ≥ 300k, затем по убыванию населения и club_presence_score
+
 ## 3. Схема данных (CRM «Лид»)
 | Поле | Источник | Обязательное |
 |------|----------|--------------|
@@ -36,6 +47,11 @@
 | Статус лида | default="Новый" | ✔ |
 
 ## 4. n8n-workflows
+0. **WF-00-Orchestrator**
+   • Trigger: Cron (расписание волн)  
+   • Read `geo_targets.csv` → Queue в Redis (Stream/List)  
+   • Batch‑запуск `WF-01` по одному городу, контроль ретраев/лимитов  
+   • Метрики/алерты/ручное управление
 1. **WF-01-Fetch-GamingClubs**  
    • Manual Trigger / Schedule `0 3 * * *` (раз в сутки)  
    • For-each service (Я.Карты, 2ГИС) → HTTP Request → HTML/JSON Parse  
@@ -50,8 +66,8 @@
    • Attach custom fields.
 4. **WF-04-Sales-Nurture**  
    • Trigger: Bitrix24 Lead status IN («Новый», «В работе»)  
-   • LLM node → generate персонализированное сообщение (prompt-темплейт «РОП 20Y»)  
-   • Telegram SendMessage (от **личного** ID через Bot API «userbot» или прямой API MTProto).  
+   • RAG (Qdrant) → LLM node → персонализированное сообщение (prompt «РОП 20Y»)  
+   • Telegram отправка через внешний MTProto‑бридж (от лица пользователя) или Bot API; fallback Email/CRM‑таск  
    • Wait / Collect replies → classify intent → update Lead.
 5. **WF-05-Hot-Lead-Handoff**  
    • Trigger: Lead status «Горячий»  
@@ -68,7 +84,7 @@
 | Bitrix24 Cloud | OAuth2 | `BITRIX24_CRM` | CRM.leads, deals, contacts |
 | Telegram | Bot Token **или** user-session (MTProto) | `TG_ROP_BOT` | Send/receive messages |
 | OpenAI / Ollama | API Key | `LLM_KEY` | GPT-4o, embeddings |
-| Qdrant | HTTP | `KB_QDRANT` | Vector storage |
+| Qdrant | HTTP | `KB_QDRANT` | Vector storage (RAG для WF-04) |
 | Redis | Internal | — | Dedup & queue |
 
 ## 6. База знаний (KB)
@@ -99,11 +115,16 @@
 | Q | Задача | Выход | Ответственный |
 |---|--------|-------|--------------|
 | Q1 | MVP: WF-01, WF-03, база знаний | Лиды в CRM | DevOps |
-| Q2 | Обогащение + LLM Sales Bot | Коммуникации | ML Engineer |
+| Q2 | Обогащение + LLM Sales Bot + MTProto‑бридж | Коммуникации | ML Engineer |
 | Q3 | Post-Sale + аналитика | Case studies | PM |
 
 ## 9. Версионирование
 Следовать правилам из корневого `README.md`: файлы workflow → `projects/dark-project-arena/workflows/YYYYMMDD_<slug>_v001.json`.
+
+## 10. Безопасность и наблюдаемость (обновлено)
+- Все Webhook снабжены секретным заголовком/allowlist IP
+- Единая политика timeouts/retries на HTTP узлах; централизованная обработка ошибок
+- Логирование с корреляционными `runId`; бэкапы Redis и регулярный экспорт в Postgres/ClickHouse
 
 ---
 © 2025 Dark Project Factory
