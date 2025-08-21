@@ -2,16 +2,13 @@
   "name": "WF-02 Enrich Contact Info",
   "nodes": [
     {
-      "id": "webhook-trigger-001",
-      "name": "Webhook Trigger",
-      "type": "n8n-nodes-base.webhook",
+      "id": "exec-trigger-001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
       "position": [260, 400],
       "parameters": {
-        "httpMethod": "POST",
-        "path": "enrich-club",
-        "responseMode": "responseNode",
-        "options": {}
+        "inputSource": "passthrough"
       }
     },
     {
@@ -122,7 +119,7 @@
       "typeVersion": 1,
       "position": [860, 500],
       "parameters": {
-        "functionCode": "// Get original club data\nconst club = $node[\"Webhook Trigger\"].json.club;\n\n// Initialize enriched data\nconst enrichedClub = {\n  ...club,\n  enrichedAt: new Date().toISOString(),\n  enrichmentSource: 'WF-02'\n};\n\n// Check if we have scraping results\nconst extractedNode = $node[\"Extract Contacts from HTML\"];\nif (extractedNode && extractedNode.json) {\n  const extracted = extractedNode.json;\n  \n  // Process emails\n  if (extracted.emails && extracted.emails.length > 0) {\n    enrichedClub.email = extracted.emails[0].replace('mailto:', '');\n    enrichedClub.additionalEmails = extracted.emails.slice(1).map(e => e.replace('mailto:', ''));\n  }\n  \n  // Process phones\n  if (extracted.phones && extracted.phones.length > 0) {\n    const phones = extracted.phones.map(p => p.replace('tel:', '').replace(/[^0-9+]/g, ''));\n    if (!enrichedClub.phone) {\n      enrichedClub.phone = phones[0];\n    }\n    enrichedClub.scrapedPhones = phones;\n  }\n  \n  // Process social media\n  if (extracted.telegram && extracted.telegram.length > 0) {\n    enrichedClub.telegram = extracted.telegram[0];\n  }\n  if (extracted.vk && extracted.vk.length > 0) {\n    enrichedClub.vk = extracted.vk[0];\n  }\n  if (extracted.instagram && extracted.instagram.length > 0) {\n    enrichedClub.instagram = extracted.instagram[0];\n  }\n  \n  enrichedClub.scrapeSuccess = true;\n} else {\n  enrichedClub.scrapeSuccess = false;\n}\n\n// Search for additional info in description/meta\nif (club.categories && club.categories.includes('компьютер')) {\n  enrichedClub.relevanceScore = 10;\n} else if (club.categories && club.categories.includes('игр')) {\n  enrichedClub.relevanceScore = 8;\n} else {\n  enrichedClub.relevanceScore = 5;\n}\n\n// Add chain detection logic\nif (club.isChain || (club.branchCount && club.branchCount > 1)) {\n  enrichedClub.priority = 'high';\n  enrichedClub.estimatedPCs = club.branchCount * 20;\n} else {\n  enrichedClub.priority = 'medium';\n  enrichedClub.estimatedPCs = 15;\n}\n\nreturn [{ json: { enrichedClub } }];"
+        "functionCode": "// Get original club data\nconst club = $node[\"When Executed by Another Workflow\"].json.club;\n\n// Initialize enriched data\nconst enrichedClub = {\n  ...club,\n  enrichedAt: new Date().toISOString(),\n  enrichmentSource: 'WF-02'\n};\n\n// Check if we have scraping results\nconst extractedNode = $node[\"Extract Contacts from HTML\"];\nif (extractedNode && extractedNode.json) {\n  const extracted = extractedNode.json;\n  \n  // Process emails\n  if (extracted.emails && extracted.emails.length > 0) {\n    enrichedClub.email = extracted.emails[0].replace('mailto:', '');\n    enrichedClub.additionalEmails = extracted.emails.slice(1).map(e => e.replace('mailto:', ''));\n  }\n  \n  // Process phones\n  if (extracted.phones && extracted.phones.length > 0) {\n    const phones = extracted.phones.map(p => p.replace('tel:', '').replace(/[^0-9+]/g, ''));\n    if (!enrichedClub.phone) {\n      enrichedClub.phone = phones[0];\n    }\n    enrichedClub.scrapedPhones = phones;\n  }\n  \n  // Process social media\n  if (extracted.telegram && extracted.telegram.length > 0) {\n    enrichedClub.telegram = extracted.telegram[0];\n  }\n  if (extracted.vk && extracted.vk.length > 0) {\n    enrichedClub.vk = extracted.vk[0];\n  }\n  if (extracted.instagram && extracted.instagram.length > 0) {\n    enrichedClub.instagram = extracted.instagram[0];\n  }\n  \n  enrichedClub.scrapeSuccess = true;\n} else {\n  enrichedClub.scrapeSuccess = false;\n}\n\n// Search for additional info in description/meta\nif (club.categories && club.categories.includes('компьютер')) {\n  enrichedClub.relevanceScore = 10;\n} else if (club.categories && club.categories.includes('игр')) {\n  enrichedClub.relevanceScore = 8;\n} else {\n  enrichedClub.relevanceScore = 5;\n}\n\n// Add chain detection logic\nif (club.isChain || (club.branchCount && club.branchCount > 1)) {\n  enrichedClub.priority = 'high';\n  enrichedClub.estimatedPCs = club.branchCount * 20;\n} else {\n  enrichedClub.priority = 'medium';\n  enrichedClub.estimatedPCs = 15;\n}\n\nreturn [{ json: { enrichedClub } }];"
       }
     },
     {
@@ -186,15 +183,13 @@
       }
     },
     {
-      "id": "respond-success-001",
-      "name": "Respond Success",
-      "type": "n8n-nodes-base.respondToWebhook",
+      "id": "done-001",
+      "name": "Done",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [2060, 400],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ {\n  success: true,\n  message: 'Club enriched successfully',\n  clubName: $json.enrichedClub.name,\n  enrichedFields: {\n    email: !!$json.enrichedClub.email,\n    telegram: !!$json.enrichedClub.telegram,\n    vk: !!$json.enrichedClub.vk,\n    instagram: !!$json.enrichedClub.instagram\n  },\n  crmUpdated: true,\n  timestamp: new Date().toISOString()\n} }}",
-        "options": {}
+        "functionCode": "return [{ json: { success: true, clubName: $json.enrichedClub.name, timestamp: new Date().toISOString() } }];"
       }
     },
     {
@@ -216,21 +211,18 @@
       }
     },
     {
-      "id": "respond-error-001",
-      "name": "Respond Error",
-      "type": "n8n-nodes-base.respondToWebhook",
+      "id": "log-error-001",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [2260, 600],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{$json}}",
-        "responseCode": 500,
-        "options": {}
+        "functionCode": "console.error('WF-02 Error', items[0].json); return items;"
       }
     }
   ],
   "connections": {
-    "Webhook Trigger": {
+    "When Executed by Another Workflow": {
       "main": [
         [
           {
@@ -336,17 +328,7 @@
         ]
       ]
     },
-    "Save Enriched to Redis": {
-      "main": [
-        [
-          {
-            "node": "Respond Success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
+    "Save Enriched to Redis": { "main": [[ { "node": "Done", "type": "main", "index": 0 } ]] },
     "Error Trigger": {
       "main": [
         [
@@ -358,17 +340,7 @@
         ]
       ]
     },
-    "Handle Error": {
-      "main": [
-        [
-          {
-            "node": "Respond Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+    "Handle Error": { "main": [[ { "node": "Log Error", "type": "main", "index": 0 } ]] }
   },
   "active": false,
   "settings": {
