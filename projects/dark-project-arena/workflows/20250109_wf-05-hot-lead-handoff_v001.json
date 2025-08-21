@@ -109,7 +109,8 @@
         "sendBody": true,
         "bodyParametersJson": "={{ { html: `<html><head><meta charset=\\\"utf-8\\\"></head><body><h2>Коммерческое предложение</h2><p><b>Клуб:</b> ${$json.handoffData.clubInfo.name}</p><p><b>Город:</b> ${$json.handoffData.clubInfo.city}</p><hr/><div style=\\\"white-space:pre-wrap\\\">${$json.message}</div></body></html>` } }}",
         "responseFormat": "file",
-        "options": { "timeout": 60000, "retryOnFail": true, "maxTries": 3 }
+        "options": { "timeout": 60000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       }
     },
     {
@@ -181,10 +182,19 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $env.BITRIX24_DOMAIN }}/rest/crm.lead.convert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
         "jsonParameters": true,
         "sendBody": true,
         "bodyParametersJson": "={{ { id: $json.handoffData.leadId, params: { CONVERT_DEAL: 'Y', CONVERT_CONTACT: 'Y', CONVERT_COMPANY: 'N', DEAL_CATEGORY_ID: 0, ASSIGNED_BY_ID: $env.SUPPLIER_BITRIX_USER_ID } } }}",
-        "options": { "timeout": 30000, "retryOnFail": true, "maxTries": 3 }
+        "options": { "timeout": 30000 },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "BITRIX24_WEBHOOK",
+          "name": "Bitrix24 Webhook"
+        }
       }
     },
     {

@@ -74,6 +74,12 @@
       "parameters": {
         "mode": "load",
         "vectorStoreId": "dark-project-kb"
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_KB",
+          "name": "Qdrant KB"
+        }
       }
     },
     {
@@ -86,6 +92,12 @@
         "mode": "retrieve",
         "query": "={{ `${$json.context.clubName} ${$json.context.city} gaming club sales messaging` }}",
         "topK": 3
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_KB",
+          "name": "Qdrant KB"
+        }
       }
     },
     {
@@ -461,14 +473,36 @@
       "main": [
         [
           {
-            "node": "Send Telegram Message",
+            "node": "Preserve Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Telegram Message": {
+    "Preserve Message": {
+      "main": [
+        [
+          {
+            "node": "MTProto Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MTProto Send Message": {
+      "main": [
+        [
+          {
+            "node": "Merge Context+Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context+Msg": {
       "main": [
         [
           {
