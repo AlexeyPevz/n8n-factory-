@@ -82,6 +82,8 @@
 | Интеграция | Тип | Секрет/Учётка | Scope |
 |------------|-----|---------------|-------|
 | Bitrix24 Cloud | OAuth2 + Webhook | `BITRIX24_CRM`, `BITRIX24_WEBHOOK_SECRET` | CRM.leads, deals, contacts |
+| Yandex Maps API | HTTP Query Auth | `YANDEX_MAPS_API` | Поиск организаций |
+| 2GIS API | HTTP Query Auth | `TWOGIS_API` | Поиск организаций |
 | Telegram | Bot Token **или** user-session (MTProto) | `TG_ROP_BOT` | Send/receive messages |
 | OpenAI / Ollama | API Key | `LLM_KEY` | GPT-4o, embeddings |
 | Qdrant | HTTP | `KB_QDRANT` | Vector storage (RAG для WF-04) |

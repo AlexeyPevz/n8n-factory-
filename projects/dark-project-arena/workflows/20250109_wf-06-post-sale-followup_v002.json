@@ -39,8 +39,7 @@
       "typeVersion": 2,
       "position": [460, 450],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },

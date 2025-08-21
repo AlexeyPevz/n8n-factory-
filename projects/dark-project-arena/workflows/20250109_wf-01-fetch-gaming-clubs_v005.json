@@ -41,8 +41,7 @@
       "typeVersion": 2,
       "position": [460, 500],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },
@@ -104,6 +103,12 @@
           "fullResponse": true
         }
       },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "YANDEX_MAPS_API",
+          "name": "Yandex Maps API"
+        }
+      },
       "continueOnFail": true
     },
     {
@@ -140,7 +145,6 @@
               "name": "fields",
               "value": "items.contact_groups,items.point,items.address_name,items.org,items.rubrics"
             },
-            
             {
               "name": "city_id",
               "value": "={{ $json.city_id_2gis || '' }}"
@@ -150,6 +154,12 @@
         "options": {
           "timeout": 30000,
           "fullResponse": true
+        }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "TWOGIS_API",
+          "name": "2GIS API"
         }
       },
       "continueOnFail": true
