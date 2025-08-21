@@ -2,47 +2,20 @@
   "name": "WF-05 Hot Lead Handoff",
   "nodes": [
     {
-      "id": "webhook-trigger-001",
-      "name": "Hot Lead Webhook",
-      "type": "n8n-nodes-base.webhook",
+      "id": "bitrix-trigger-001",
+      "name": "Bitrix24 Lead Status Change",
+      "type": "n8n-nodes-base.bitrix24Trigger",
       "typeVersion": 1,
       "position": [260, 400],
       "parameters": {
-        "httpMethod": "POST",
-        "path": "hot-lead-handoff",
-        "authentication": "headerAuth",
-        "responseMode": "responseNode",
-        "options": {
-          "responseCode": 200,
-          "responseData": "allEntries",
-          "responseHeaders": {
-            "entries": [
-              { "name": "X-Workflow", "value": "WF-05" }
-            ]
-          }
-        }
-      },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "N8N_WEBHOOK_SECRET",
-          "name": "N8N Webhook Secret"
-        }
-      }
-    },
-    {
-      "id": "bitrix24-trigger-001",
-      "name": "Bitrix24 Hot Lead Trigger",
-      "type": "n8n-nodes-base.bitrix24Trigger",
-      "typeVersion": 1,
-      "position": [260, 600],
-      "parameters": {
-        "resource": "lead",
-        "event": "update",
-        "additionalFields": {
-          "filter": {
-            "STATUS_ID": "HOT"
-          }
-        }
+        "eventsUi": {
+          "eventValues": [
+            {
+              "name": "onCrmLeadUpdate"
+            }
+          ]
+        },
+        "additionalFields": {}
       },
       "credentials": {
         "bitrix24Api": {
@@ -52,15 +25,64 @@
       }
     },
     {
-      "id": "get-lead-full-001",
-      "name": "Get Full Lead Data",
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 450],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "check-hot-status-001",
+      "name": "Check Hot Lead Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 450],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isHotLead",
+              "leftValue": "={{ $json.data?.STATUS_ID || $json.STATUS_ID }}",
+              "rightValue": "HOT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "get-lead-details-001",
+      "name": "Get Lead Details",
       "type": "n8n-nodes-base.bitrix24",
       "typeVersion": 1,
-      "position": [460, 500],
+      "position": [860, 350],
       "parameters": {
         "resource": "lead",
         "operation": "get",
-        "leadId": "={{ $json.leadId || $json.ID }}"
+        "leadId": "={{ $json.data?.ID || $json.ID || $json.leadId }}"
       },
       "credentials": {
         "bitrix24Api": {
@@ -72,60 +94,21 @@
     {
       "id": "prepare-handoff-data-001",
       "name": "Prepare Handoff Data",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
-      "position": [660, 500],
-      "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
-        "assignments": {
-          "assignments": [
-            {
-              "id": "handoffData",
-              "name": "handoffData",
-              "type": "object",
-              "value": "={{ {\n  leadId: $json.ID,\n  timestamp: new Date().toISOString(),\n  clubInfo: {\n    name: $json.TITLE,\n    city: $json.ADDRESS_CITY,\n    region: $json.ADDRESS_PROVINCE,\n    address: $json.ADDRESS,\n    isChain: $json.UF_CRM_IS_CHAIN === 'Y',\n    coordinates: $json.UF_CRM_COORDINATES\n  },\n  contacts: {\n    phone: $json.PHONE?.[0]?.VALUE || '',\n    email: $json.EMAIL?.[0]?.VALUE || '',\n    telegram: $json.UF_CRM_TELEGRAM || '',\n    contactPerson: $json.NAME || 'Не указано'\n  },\n  engagement: {\n    source: $json.SOURCE_DESCRIPTION,\n    createdDate: $json.DATE_CREATE,\n    lastActivity: $json.DATE_MODIFY,\n    comments: $json.COMMENTS\n  },\n  opportunity: {\n    estimatedDealSize: $json.OPPORTUNITY || 0,\n    currency: $json.CURRENCY_ID || 'RUB'\n  }\n} }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "generate-proposal-001",
-      "name": "Generate Commercial Proposal",
-      "type": "n8n-nodes-langchain.lmChatOpenAi",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
-      "position": [860, 500],
+      "position": [1060, 350],
       "parameters": {
-        "model": "gpt-4o",
-        "temperature": 0.3,
-        "maxTokens": 2000,
-        "systemMessage": "Ты - эксперт по составлению коммерческих предложений для компьютерных клубов. Создавай структурированные, убедительные КП с фокусом на выгоды клиента.",
-        "messages": "={{ `Создай персонализированное коммерческое предложение для:\n\nКлуб: ${$json.handoffData.clubInfo.name}\nГород: ${$json.handoffData.clubInfo.city}\nСеть: ${$json.handoffData.clubInfo.isChain ? 'Да' : 'Нет'}\n\nВключи:\n1. Персональное обращение\n2. Анализ потребностей (исходя из типа клуба)\n3. Рекомендуемый комплект оборудования Dark Project Arena\n4. Расчет ROI и окупаемости\n5. Специальные условия (если сеть)\n6. Призыв к действию\n\nИспользуй данные:\n- Мыши Arena: 2500-3500 руб\n- Клавиатуры Arena: 3000-4500 руб\n- Гарнитуры Arena: 4000-6000 руб\n- Ковры Arena: 1500-2000 руб\n- Средний чек клуба: 150 руб/час\n- Увеличение посещаемости с новым оборудованием: 15-20%` }}",
-        "options": {}
-      },
-      "credentials": {
-        "openAiApi": {
-          "id": "LLM_KEY",
-          "name": "OpenAI API"
-        }
+        "functionCode": "const lead = $json;\n\n// Извлекаем данные лида\nconst handoffData = {\n  leadId: lead.ID,\n  leadName: lead.TITLE || 'Неизвестный клуб',\n  contactName: lead.NAME || 'Контактное лицо',\n  phone: lead.PHONE?.[0]?.VALUE || 'Не указан',\n  email: lead.EMAIL?.[0]?.VALUE || '',\n  city: lead.ADDRESS_CITY || lead.UF_CRM_CITY || 'Не указан',\n  estimatedPCs: lead.UF_CRM_ESTIMATED_PCS || 15,\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  branchCount: lead.UF_CRM_BRANCH_COUNT || 1,\n  telegram: lead.UF_CRM_TELEGRAM || '',\n  comments: lead.COMMENTS || '',\n  timestamp: new Date().toISOString(),\n  handoffType: 'hot_lead'\n};\n\n// Рассчитываем потенциал сделки\nhandoffData.dealPotential = handoffData.estimatedPCs * 50000; // 50k руб за ПК\nif (handoffData.isChain) {\n  handoffData.dealPotential *= handoffData.branchCount;\n}\n\nconsole.log(`Preparing hot lead handoff for ${handoffData.leadName}`);\n\nreturn [{ json: handoffData }];"
       }
     },
     {
-      "id": "create-pdf-proposal-001",
-      "name": "Generate PDF via API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1060, 500],
+      "id": "generate-documents-001",
+      "name": "Generate Documents",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 350],
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.PDF_SERVICE_URL }}/render",
-        "jsonParameters": true,
-        "sendBody": true,
-        "bodyParametersJson": "={{ { html: `<html><head><meta charset=\\\"utf-8\\\"></head><body><h2>Коммерческое предложение</h2><p><b>Клуб:</b> ${$json.handoffData.clubInfo.name}</p><p><b>Город:</b> ${$json.handoffData.clubInfo.city}</p><hr/><div style=\\\"white-space:pre-wrap\\\">${$json.message}</div></body></html>` } }}",
-        "responseFormat": "file",
-        "options": { "timeout": 60000 },
-        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
+        "functionCode": "const handoff = $json;\n\n// Генерируем коммерческое предложение\nconst kp = {\n  title: `Коммерческое предложение для ${handoff.leadName}`,\n  date: new Date().toLocaleDateString('ru-RU'),\n  content: `\n**КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ**\n\nДля: ${handoff.leadName}\nГород: ${handoff.city}\nКонтакт: ${handoff.contactName}\nТелефон: ${handoff.phone}\n\n**Предлагаемое решение:**\n\n1. **Периферия Dark Project Arena**\n   - Игровые клавиатуры: ${handoff.estimatedPCs} шт.\n   - Игровые мыши: ${handoff.estimatedPCs} шт.\n   - Гарнитуры: ${handoff.estimatedPCs} шт.\n   - Коврики: ${handoff.estimatedPCs} шт.\n\n2. **Условия поставки:**\n   - Оптовая цена: со скидкой 25%\n   - Доставка: бесплатно при заказе от 500 000 руб\n   - Гарантия: 2 года\n   - Замена по гарантии: в течение 48 часов\n\n3. **Специальные условия для сетей:**\n   ${handoff.isChain ? '- Дополнительная скидка 5% для сетевых клубов\\n   - Единый договор на все филиалы\\n   - Персональный менеджер' : '- Возможность тестового комплекта'}\n\n**Итоговая стоимость:** ${handoff.dealPotential.toLocaleString('ru-RU')} руб.\n\n**Контакты поставщика:**\nТел: +7 (495) 123-45-67\nEmail: sales@darkproject.ru\n`\n};\n\n// Генерируем техническое задание\nconst tz = {\n  title: `Техническое задание для ${handoff.leadName}`,\n  content: `\n**ТЕХНИЧЕСКОЕ ЗАДАНИЕ**\n\n1. **Общие требования:**\n   - Количество рабочих мест: ${handoff.estimatedPCs}\n   - Тип заведения: ${handoff.isChain ? 'Сетевой компьютерный клуб' : 'Компьютерный клуб'}\n   - Филиалов: ${handoff.branchCount}\n\n2. **Требования к периферии:**\n   - Механические клавиатуры с RGB подсветкой\n   - Игровые мыши с DPI 3200+\n   - Гарнитуры с шумоподавлением\n   - Коврики размером XL\n\n3. **Дополнительные требования:**\n   - Синхронизация подсветки\n   - ПО для управления периферией\n   - Запасные комплекты (10% от основного заказа)\n`\n};\n\nreturn [{\n  json: {\n    ...handoff,\n    documents: {\n      kp: kp,\n      tz: tz\n    }\n  }\n}];"
       }
     },
     {
@@ -133,25 +116,24 @@
       "name": "Notify Supplier Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [1260, 400],
+      "position": [1460, 250],
       "parameters": {
         "operation": "sendMessage",
-        "chatId": "={{ $env.SUPPLIER_TELEGRAM_CHAT_ID }}",
-        "text": "={{ `🔥 *ГОРЯЧИЙ ЛИД!*\n\n🏢 *Клуб:* ${$json.handoffData.clubInfo.name}\n📍 *Город:* ${$json.handoffData.clubInfo.city}\n${$json.handoffData.clubInfo.isChain ? '🔗 *Сетевой клуб*\n' : ''}\n📞 *Телефон:* ${$json.handoffData.contacts.phone}\n✉️ *Email:* ${$json.handoffData.contacts.email || 'Не указан'}\n💬 *Telegram:* ${$json.handoffData.contacts.telegram || 'Не указан'}\n\n💰 *Потенциал сделки:* ${$json.handoffData.opportunity.estimatedDealSize || 'Не оценен'} ${$json.handoffData.opportunity.currency}\n\n📋 *История взаимодействия:*\n${$json.handoffData.engagement.comments?.slice(-500) || 'Нет комментариев'}\n\n📎 КП отправлено на email поставщика\n🔗 [Открыть в CRM](https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/)` }}",
+        "chatId": "={{ $env.TELEGRAM_SUPPLIER_CHAT_ID }}",
+        "text": "={{ `🔥 <b>ГОРЯЧИЙ ЛИД!</b>\\n\\n🏢 Клуб: ${$json.leadName}\\n📍 Город: ${$json.city}\\n👤 Контакт: ${$json.contactName}\\n📱 Телефон: ${$json.phone}\\n💼 Потенциал сделки: ${$json.dealPotential.toLocaleString('ru-RU')} руб\\n🔗 Сеть: ${$json.isChain ? 'Да (' + $json.branchCount + ' филиалов)' : 'Нет'}\\n\\n📄 КП и ТЗ отправлены на email\\n\\n⚡️ Свяжитесь в течение 2 часов!` }}",
         "additionalFields": {
-          "parse_mode": "Markdown",
+          "parse_mode": "HTML",
+          "disable_notification": false,
           "reply_markup": {
             "inline_keyboard": [
               [
                 {
-                  "text": "✅ Взять в работу",
-                  "callback_data": "supplier_take_lead"
-                }
-              ],
-              [
+                  "text": "✅ Взял в работу",
+                  "callback_data": "take_lead_{{$json.leadId}}"
+                },
                 {
-                  "text": "📞 Связался с клиентом",
-                  "callback_data": "supplier_contacted"
+                  "text": "📞 Позвонить",
+                  "url": "tel:{{$json.phone}}"
                 }
               ]
             ]
@@ -170,61 +152,58 @@
       "name": "Send Email to Supplier",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [1260, 600],
+      "position": [1460, 450],
       "parameters": {
         "sendTo": "={{ $env.SUPPLIER_EMAIL }}",
-        "subject": "={{ `🔥 Горячий лид: ${$json.handoffData.clubInfo.name} - ${$json.handoffData.clubInfo.city}` }}",
+        "subject": "🔥 Горячий лид: {{ $json.leadName }} - {{ $json.city }}",
         "emailType": "html",
-        "htmlBody": "={{ `<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }\n    .content { padding: 20px; background: #f4f4f4; }\n    .info-block { background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }\n    .cta { background: #e74c3c; color: white; padding: 15px 30px; text-decoration: none; display: inline-block; margin: 20px 0; border-radius: 5px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🔥 Горячий лид передан в работу</h1>\n    </div>\n    <div class=\"content\">\n      <div class=\"info-block\">\n        <h2>Информация о клубе</h2>\n        <p><strong>Название:</strong> ${$json.handoffData.clubInfo.name}</p>\n        <p><strong>Город:</strong> ${$json.handoffData.clubInfo.city}</p>\n        <p><strong>Адрес:</strong> ${$json.handoffData.clubInfo.address}</p>\n        <p><strong>Сетевой клуб:</strong> ${$json.handoffData.clubInfo.isChain ? 'Да' : 'Нет'}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Контакты</h2>\n        <p><strong>Телефон:</strong> ${$json.handoffData.contacts.phone}</p>\n        <p><strong>Email:</strong> ${$json.handoffData.contacts.email || 'Не указан'}</p>\n        <p><strong>Telegram:</strong> ${$json.handoffData.contacts.telegram || 'Не указан'}</p>\n        <p><strong>Контактное лицо:</strong> ${$json.handoffData.contacts.contactPerson}</p>\n      </div>\n      \n      <div class=\"info-block\">\n        <h2>Коммерческое предложение</h2>\n        <p>${$json.message?.replace(/\\n/g, '<br>')}</p>\n      </div>\n      \n      <a href=\"https://your-bitrix24.ru/crm/lead/details/${$json.handoffData.leadId}/\" class=\"cta\">Открыть в CRM</a>\n    </div>\n  </div>\n</body>\n</html>` }}",
-        "attachments": { "attachments": [ { "binaryPropertyName": "data" } ] },
+        "message": "={{ `<h2>Горячий лид требует немедленного внимания!</h2>\\n<p><strong>Клуб:</strong> ${$json.leadName}<br>\\n<strong>Город:</strong> ${$json.city}<br>\\n<strong>Контакт:</strong> ${$json.contactName}<br>\\n<strong>Телефон:</strong> <a href='tel:${$json.phone}'>${$json.phone}</a><br>\\n<strong>Email:</strong> ${$json.email || 'Не указан'}<br>\\n<strong>Потенциал сделки:</strong> ${$json.dealPotential.toLocaleString('ru-RU')} руб<br>\\n<strong>Сеть:</strong> ${$json.isChain ? 'Да (' + $json.branchCount + ' филиалов)' : 'Нет'}</p>\\n\\n<h3>Коммерческое предложение:</h3>\\n<pre>${$json.documents.kp.content}</pre>\\n\\n<h3>Техническое задание:</h3>\\n<pre>${$json.documents.tz.content}</pre>\\n\\n<p style='color: red;'><strong>⚡ Необходимо связаться с клиентом в течение 2 часов!</strong></p>` }}",
         "options": {
-          "allowUnauthorizedCerts": true
+          "allowUnauthorizedCerts": false
         }
       },
       "credentials": {
         "smtp": {
-          "id": "SMTP_CREDENTIALS",
+          "id": "SMTP_SERVER",
           "name": "SMTP Server"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
-      "id": "convert-lead-001",
-      "name": "Convert Lead",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1460, 500],
+      "id": "update-lead-status-001",
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1660, 350],
       "parameters": {
-        "method": "POST",
-        "url": "={{ $env.BITRIX24_DOMAIN }}/rest/crm.lead.convert",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
-        "jsonParameters": true,
-        "sendBody": true,
-        "bodyParametersJson": "={{ { id: $json.handoffData.leadId, params: { CONVERT_DEAL: 'Y', CONVERT_CONTACT: 'Y', CONVERT_COMPANY: 'N', DEAL_CATEGORY_ID: 0, ASSIGNED_BY_ID: $env.SUPPLIER_BITRIX_USER_ID } } }}",
-        "options": { "timeout": 30000 },
-        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.leadId }}",
+        "updateFields": {
+          "STATUS_ID": "IN_PROCESS",
+          "COMMENTS": "={{ $json.comments + '\\n\\n[' + new Date().toISOString() + '] Передан поставщику. КП отправлено.' }}"
+        }
       },
       "credentials": {
-        "httpQueryAuth": {
-          "id": "BITRIX24_WEBHOOK",
-          "name": "Bitrix24 Webhook"
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
         }
       }
     },
     {
       "id": "log-handoff-001",
-      "name": "Log Handoff Activity",
+      "name": "Log Handoff",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [1660, 500],
+      "position": [1860, 350],
       "parameters": {
         "operation": "set",
-        "key": "={{ `handoff_log:${$json.handoffData.leadId}:${Date.now()}` }}",
-        "value": "={{ JSON.stringify({\n  leadId: $json.handoffData.leadId,\n  clubName: $json.handoffData.clubInfo.name,\n  city: $json.handoffData.clubInfo.city,\n  handoffTime: new Date().toISOString(),\n  supplierNotified: true,\n  proposalGenerated: true,\n  estimatedValue: $json.handoffData.opportunity.estimatedDealSize\n}) }}",
-        "keyType": "automatic",
+        "key": "={{ `handoff:hot:${$json.leadId}:${Date.now()}` }}",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
-        "ttl": 7776000
+        "ttl": 2592000
       },
       "credentials": {
         "redis": {
@@ -234,23 +213,47 @@
       }
     },
     {
-      "id": "webhook-response-001",
-      "name": "Webhook Response",
-      "type": "n8n-nodes-base.respondToWebhook",
+      "id": "create-task-001",
+      "name": "Create Follow-up Task",
+      "type": "n8n-nodes-base.bitrix24",
       "typeVersion": 1,
-      "position": [1860, 400],
+      "position": [2060, 350],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ {\n  success: true,\n  leadId: $json.handoffData.leadId,\n  message: 'Hot lead successfully handed off to supplier',\n  notifications: {\n    telegram: true,\n    email: true\n  },\n  timestamp: new Date().toISOString()\n} }}",
-        "options": {}
+        "resource": "task",
+        "operation": "create",
+        "title": "Проверить статус горячего лида {{ $json.leadName }}",
+        "description": "={{ `Проверить результат передачи горячего лида поставщику.\\n\\nКлуб: ${$json.leadName}\\nГород: ${$json.city}\\nПотенциал: ${$json.dealPotential.toLocaleString('ru-RU')} руб\\n\\nСвязаться с поставщиком и узнать статус переговоров.` }}",
+        "additionalFields": {
+          "deadline": "={{ new Date(Date.now() + 24*60*60*1000).toISOString() }}",
+          "responsible_id": "={{ $env.SALES_MANAGER_ID }}",
+          "crm": {
+            "lead": ["{{ $json.leadId }}"]
+          }
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
       }
     },
     {
-      "id": "error-handler-001",
-      "name": "Error Handler",
+      "id": "complete-001",
+      "name": "Complete",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2260, 350],
+      "parameters": {
+        "functionCode": "const result = {\n  success: true,\n  workflow: 'WF-05',\n  action: 'hot_lead_handoff',\n  leadId: $json.leadId,\n  leadName: $json.leadName,\n  supplierNotified: true,\n  documentsGenerated: true,\n  taskCreated: true,\n  timestamp: new Date().toISOString()\n};\n\nconsole.log(`Hot lead handoff completed for ${result.leadName}`);\n\nreturn [{ json: result }];"
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [1860, 700],
+      "position": [260, 700],
       "parameters": {}
     },
     {
@@ -258,23 +261,23 @@
       "name": "Handle Error",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
-      "position": [2060, 700],
+      "position": [460, 700],
       "parameters": {
-        "functionCode": "const error = {\n  workflow: 'WF-05 Hot Lead Handoff',\n  timestamp: new Date().toISOString(),\n  error: items[0].json.error,\n  leadData: items[0].json.handoffData || {}\n};\n\nconsole.error('Hot Lead Handoff Error:', error);\n\n// Notify admin about critical error\nreturn [{ json: error }];"
+        "functionCode": "const error = {\n  workflow: 'WF-05 Hot Lead Handoff',\n  timestamp: new Date().toISOString(),\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  leadId: $node['Prepare Handoff Data']?.json?.leadId || 'Unknown'\n};\n\nconsole.error('WF-05 Error:', error);\n\nreturn [{ json: error }];"
       }
     },
     {
-      "id": "notify-admin-error-001",
-      "name": "Notify Admin Error",
+      "id": "notify-error-001",
+      "name": "Notify Error",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [2260, 700],
+      "position": [660, 700],
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
-        "text": "={{ `❌ *CRITICAL ERROR in Hot Lead Handoff*\n\nLead: ${$json.leadData.clubInfo?.name || 'Unknown'}\nError: ${$json.error.message}\nNode: ${$json.error.node?.name}\n\nRequires immediate attention!` }}",
+        "text": "={{ `❌ <b>WF-05 Hot Lead Handoff Error</b>\\n\\n🔴 Error: ${$json.error}\\n📍 Node: ${$json.node}\\n🆔 Lead ID: ${$json.leadId}\\n🕐 Time: ${new Date($json.timestamp).toLocaleString('ru-RU')}` }}",
         "additionalFields": {
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "credentials": {
@@ -286,152 +289,78 @@
     }
   ],
   "connections": {
-    "Hot Lead Webhook": {
+    "Bitrix24 Lead Status Change": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Check Hot Lead Status", "type": "main", "index": 0}]]
+    },
+    "Check Hot Lead Status": {
       "main": [
-        [
-          {
-            "node": "Get Full Lead Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{"node": "Get Lead Details", "type": "main", "index": 0}],
+        []
       ]
     },
-    "Bitrix24 Hot Lead Trigger": {
-      "main": [
-        [
-          {
-            "node": "Get Full Lead Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Full Lead Data": {
-      "main": [
-        [
-          {
-            "node": "Prepare Handoff Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Get Lead Details": {
+      "main": [[{"node": "Prepare Handoff Data", "type": "main", "index": 0}]]
     },
     "Prepare Handoff Data": {
-      "main": [
-        [
-          {
-            "node": "Generate Commercial Proposal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Generate Documents", "type": "main", "index": 0}]]
     },
-    "Generate Commercial Proposal": {
-      "main": [
-        [
-          {
-            "node": "Create PDF Proposal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate PDF via API": {
-      "main": [
-        [
-          {
-            "node": "Notify Supplier Telegram",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send Email to Supplier",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Generate Documents": {
+      "main": [[
+        {"node": "Notify Supplier Telegram", "type": "main", "index": 0},
+        {"node": "Send Email to Supplier", "type": "main", "index": 0}
+      ]]
     },
     "Notify Supplier Telegram": {
-      "main": [
-        [
-          {
-            "node": "Convert Lead",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Update Lead Status", "type": "main", "index": 0}]]
     },
     "Send Email to Supplier": {
-      "main": [
-        [
-          {
-            "node": "Convert Lead",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Update Lead Status", "type": "main", "index": 0}]]
     },
-    "Convert Lead": {
-      "main": [
-        [
-          {
-            "node": "Log Handoff Activity",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Update Lead Status": {
+      "main": [[{"node": "Log Handoff", "type": "main", "index": 0}]]
     },
-    "Log Handoff Activity": {
-      "main": [
-        [
-          {
-            "node": "Webhook Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Log Handoff": {
+      "main": [[{"node": "Create Follow-up Task", "type": "main", "index": 0}]]
     },
-    "Error Handler": {
-      "main": [
-        [
-          {
-            "node": "Handle Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Create Follow-up Task": {
+      "main": [[{"node": "Complete", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
     },
     "Handle Error": {
-      "main": [
-        [
-          {
-            "node": "Notify Admin Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "saveManualExecutions": true
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120,
+    "timezone": "Europe/Moscow"
   },
   "version": 2,
+  "id": "wf-05-hot-lead-handoff",
   "meta": {
-    "description": "Handles hot lead handoff to supplier with automated proposal generation and notifications",
-    "tags": ["hot-lead", "handoff", "supplier", "proposal-generation"]
-  }
+    "templateCredsSetupCompleted": true,
+    "description": "Handles hot lead handoff to supplier with document generation, notifications, and follow-up tasks",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "6",
+      "name": "sales"
+    }
+  ]
 }
