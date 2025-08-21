@@ -485,6 +485,32 @@
           "name": "Redis Internal"
         }
       }
+    },
+    {
+      "id": "retry-if-openai-001",
+      "name": "Generate Message (Retry IF)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2460, 200],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {"id": "is429", "leftValue": "={{ $node['Generate Message'].json.statusCode }}", "rightValue": 429, "operator": {"type": "number", "operation": "equals"}},
+            {"id": "is5xx", "leftValue": "={{ $node['Generate Message'].json.statusCode }}", "rightValue": "5..", "operator": {"type": "string", "operation": "regex"}}
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-openai-retry-001",
+      "name": "Wait OpenAI Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2660, 200],
+      "parameters": {"amount": 5, "unit": "seconds"}
     }
   ],
   "connections": {
@@ -530,6 +556,15 @@
     },
     "Generate Message": {
       "main": [[{"node": "Parse Message", "type": "main", "index": 0}]]
+    },
+    "Generate Message (Retry IF)": {
+      "main": [
+        [{"node": "Wait OpenAI Retry", "type": "main", "index": 0}],
+        [{"node": "Parse Message", "type": "main", "index": 0}]
+      ]
+    },
+    "Wait OpenAI Retry": {
+      "main": [[{"node": "Generate Message", "type": "main", "index": 0}]]
     },
     "Parse Message": {
       "main": [[{"node": "Has Telegram?", "type": "main", "index": 0}]]

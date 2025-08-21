@@ -425,6 +425,58 @@
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "id": "retry-if-yandex-001",
+      "name": "Fetch Yandex Maps (Retry IF)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1260, 350],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {"id": "is429", "leftValue": "={{ $node['Fetch Yandex Maps'].json.statusCode }}", "rightValue": 429, "operator": {"type": "number", "operation": "equals"}},
+            {"id": "is5xx", "leftValue": "={{ $node['Fetch Yandex Maps'].json.statusCode }}", "rightValue": "5..", "operator": {"type": "string", "operation": "regex"}}
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-yandex-retry-001",
+      "name": "Wait Yandex Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1460, 350],
+      "parameters": {"amount": 5, "unit": "seconds"}
+    },
+    {
+      "id": "retry-if-2gis-001",
+      "name": "Fetch 2GIS (Retry IF)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1260, 650],
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {"id": "is429", "leftValue": "={{ $node['Fetch 2GIS'].json.statusCode }}", "rightValue": 429, "operator": {"type": "number", "operation": "equals"}},
+            {"id": "is5xx", "leftValue": "={{ $node['Fetch 2GIS'].json.statusCode }}", "rightValue": "5..", "operator": {"type": "string", "operation": "regex"}}
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-2gis-retry-001",
+      "name": "Wait 2GIS Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1460, 650],
+      "parameters": {"amount": 5, "unit": "seconds"}
     }
   ],
   "connections": {
@@ -450,10 +502,28 @@
       ]]
     },
     "Fetch Yandex Maps": {
-      "main": [[{"node": "Merge API Results", "type": "main", "index": 0}]]
+      "main": [[{"node": "Fetch Yandex Maps (Retry IF)", "type": "main", "index": 0}]]
+    },
+    "Fetch Yandex Maps (Retry IF)": {
+      "main": [
+        [{"node": "Wait Yandex Retry", "type": "main", "index": 0}],
+        [{"node": "Merge API Results", "type": "main", "index": 0}]
+      ]
+    },
+    "Wait Yandex Retry": {
+      "main": [[{"node": "Fetch Yandex Maps", "type": "main", "index": 0}]]
     },
     "Fetch 2GIS": {
-      "main": [[{"node": "Merge API Results", "type": "main", "index": 1}]]
+      "main": [[{"node": "Fetch 2GIS (Retry IF)", "type": "main", "index": 0}]]
+    },
+    "Fetch 2GIS (Retry IF)": {
+      "main": [
+        [{"node": "Wait 2GIS Retry", "type": "main", "index": 0}],
+        [{"node": "Merge API Results", "type": "main", "index": 1}]
+      ]
+    },
+    "Wait 2GIS Retry": {
+      "main": [[{"node": "Fetch 2GIS", "type": "main", "index": 0}]]
     },
     "Merge API Results": {
       "main": [[{"node": "Parse Results", "type": "main", "index": 0}]]
