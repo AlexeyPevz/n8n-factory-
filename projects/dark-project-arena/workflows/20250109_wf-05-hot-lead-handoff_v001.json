@@ -2,25 +2,22 @@
   "name": "WF-05 Hot Lead Handoff",
   "nodes": [
     {
-      "id": "bitrix-trigger-001",
-      "name": "Bitrix24 Lead Status Change",
-      "type": "n8n-nodes-base.bitrix24Trigger",
+      "id": "webhook-trigger-001",
+      "name": "Bitrix24 Webhook",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [260, 400],
       "parameters": {
-        "eventsUi": {
-          "eventValues": [
-            {
-              "name": "onCrmLeadUpdate"
-            }
-          ]
-        },
-        "additionalFields": {}
+        "httpMethod": "POST",
+        "path": "bitrix24-hot-lead",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
       },
       "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "httpHeaderAuth": {
+          "id": "BITRIX24_WEBHOOK_SECRET",
+          "name": "Bitrix24 Webhook Secret"
         }
       }
     },
@@ -39,8 +36,7 @@
       "typeVersion": 2,
       "position": [460, 450],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },

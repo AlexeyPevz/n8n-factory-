@@ -44,8 +44,7 @@
       "typeVersion": 2,
       "position": [460, 500],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },
@@ -253,7 +252,9 @@
         "resource": "lead",
         "operation": "update",
         "leadId": "={{ $json.id }}",
-        "updateFields": "={{ $json.fields }}"
+        "updateFields": {
+          "fields": "={{ $json.fields }}"
+        }
       },
       "credentials": {
         "bitrix24Api": {

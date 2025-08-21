@@ -41,8 +41,7 @@
       "typeVersion": 2,
       "position": [460, 500],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },
@@ -96,17 +95,18 @@
             {
               "name": "results",
               "value": "50"
-            },
-            
+            }
           ]
         },
         "options": {
           "timeout": 30000,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
+          "fullResponse": true
+        }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "YANDEX_MAPS_API",
+          "name": "Yandex Maps API"
         }
       },
       "continueOnFail": true
@@ -145,7 +145,6 @@
               "name": "fields",
               "value": "items.contact_groups,items.point,items.address_name,items.org,items.rubrics"
             },
-            
             {
               "name": "city_id",
               "value": "={{ $json.city_id_2gis || '' }}"
@@ -154,11 +153,13 @@
         },
         "options": {
           "timeout": 30000,
-          "response": {
-            "response": {
-              "fullResponse": true
-            }
-          }
+          "fullResponse": true
+        }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "TWOGIS_API",
+          "name": "2GIS API"
         }
       },
       "continueOnFail": true
@@ -279,8 +280,7 @@
       "typeVersion": 1,
       "position": [2460, 300],
       "parameters": {
-        "operation": "add",
-        "keyType": "set",
+        "operation": "sadd",
         "key": "={{ $json.key }}",
         "value": "={{ $json.value }}"
       },
@@ -437,7 +437,7 @@
           "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
           "conditions": [
             {"id": "is429", "leftValue": "={{ $node['Fetch Yandex Maps'].json.statusCode }}", "rightValue": 429, "operator": {"type": "number", "operation": "equals"}},
-            {"id": "is5xx", "leftValue": "={{ $node['Fetch Yandex Maps'].json.statusCode }}", "rightValue": "5..", "operator": {"type": "string", "operation": "regex"}}
+            {"id": "is5xx", "leftValue": "={{ $node['Fetch Yandex Maps'].json.statusCode }}", "rightValue": "^5\\d{2}$", "operator": {"type": "string", "operation": "regex"}}
           ],
           "combinator": "or"
         },
@@ -463,7 +463,7 @@
           "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
           "conditions": [
             {"id": "is429", "leftValue": "={{ $node['Fetch 2GIS'].json.statusCode }}", "rightValue": 429, "operator": {"type": "number", "operation": "equals"}},
-            {"id": "is5xx", "leftValue": "={{ $node['Fetch 2GIS'].json.statusCode }}", "rightValue": "5..", "operator": {"type": "string", "operation": "regex"}}
+            {"id": "is5xx", "leftValue": "={{ $node['Fetch 2GIS'].json.statusCode }}", "rightValue": "^5\\d{2}$", "operator": {"type": "string", "operation": "regex"}}
           ],
           "combinator": "or"
         },

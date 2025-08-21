@@ -33,8 +33,7 @@
       "typeVersion": 2,
       "position": [460, 450],
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "chooseBranch",
+        "mode": "chooseBranch",
         "options": {}
       }
     },
@@ -145,10 +144,9 @@
       "typeVersion": 1,
       "position": [1660, 520],
       "parameters": {
-        "operation": "push",
-        "list": "errors:orchestrator",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:orchestrator",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 86400
       },
@@ -192,19 +190,11 @@
     {
       "id": "sort-by-population-001",
       "name": "Sort by Population",
-      "type": "n8n-nodes-base.sort",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [1860, 450],
       "parameters": {
-        "sortFieldsUi": {
-          "sortFields": [
-            {
-              "fieldName": "population",
-              "order": "descending"
-            }
-          ]
-        },
-        "options": {}
+        "functionCode": "// Sort cities by population in descending order\nconst cities = $input.all();\nconst sorted = cities.sort((a, b) => {\n  const popA = parseInt(a.json.population) || 0;\n  const popB = parseInt(b.json.population) || 0;\n  return popB - popA;\n});\n\nconsole.log(`Sorted ${sorted.length} cities by population`);\nreturn sorted;"
       }
     },
     {
@@ -235,10 +225,9 @@
       "typeVersion": 1,
       "position": [2460, 350],
       "parameters": {
-        "operation": "push",
-        "list": "queue:wf01:tasks",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush"
+        "operation": "lpush",
+        "key": "queue:wf01:tasks",
+        "value": "={{ JSON.stringify($json) }}"
       },
       "credentials": {
         "redis": {
@@ -438,10 +427,9 @@
       "typeVersion": 1,
       "position": [660, 800],
       "parameters": {
-        "operation": "push",
-        "list": "errors:orchestrator:critical",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:orchestrator:critical",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 604800
       },
@@ -549,7 +537,7 @@
       "main": [[{"node": "Complete Batch", "type": "main", "index": 0}]]
     },
     "Complete Batch": {
-      "main": [[{"node": "Split Cities", "type": "main", "index": 0}]]
+      "main": []
     },
     "Create Wave Summary": {
       "main": [[{"node": "Save Summary", "type": "main", "index": 0}]]
