@@ -2,6 +2,24 @@
   "name": "WF-04 Sales Nurture with AI Agent",
   "nodes": [
     {
+      "id": "bitrix24-new-leads-trigger-001",
+      "name": "Bitrix24 New Leads Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 30,
+              "unit": "minutes"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "telegram-message-trigger-001",
       "name": "Telegram Message Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
@@ -514,6 +532,164 @@
           "name": "Redis Internal"
         }
       }
+    },
+    {
+      "id": "get-new-leads-001",
+      "name": "Get New Leads from CRM",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [460, 200],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "filters": {
+          "filter": {
+            "STATUS_ID": "NEW",
+            "UF_CRM_CONTACT_COUNT": 0
+          }
+        },
+        "options": {
+          "select": ["ID", "TITLE", "PHONE", "EMAIL", "UF_CRM_TELEGRAM", "ADDRESS_CITY", "UF_CRM_IS_CHAIN", "UF_CRM_ESTIMATED_PCS"],
+          "limit": 10
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "split-new-leads-001",
+      "name": "Split New Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 200],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-initial-contact-001",
+      "name": "Prepare Initial Contact",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 200],
+      "parameters": {
+        "functionCode": "// Подготавливаем данные для первого контакта\nconst lead = $json;\n\n// Определяем лучший канал связи\nlet preferredChannel = 'none';\nlet contactValue = '';\n\nif (lead.UF_CRM_TELEGRAM) {\n  preferredChannel = 'telegram';\n  contactValue = lead.UF_CRM_TELEGRAM;\n} else if (lead.PHONE && lead.PHONE.length > 0) {\n  preferredChannel = 'sms';\n  contactValue = lead.PHONE[0].VALUE || lead.PHONE;\n} else if (lead.EMAIL && lead.EMAIL.length > 0) {\n  preferredChannel = 'email';\n  contactValue = lead.EMAIL[0].VALUE || lead.EMAIL;\n}\n\n// Подготавливаем контекст для первого сообщения\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Уважаемый клиент',\n  city: lead.ADDRESS_CITY || '',\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 20,\n  preferredChannel: preferredChannel,\n  contactValue: contactValue,\n  isInitialContact: true,\n  needsKP: true,\n  dialogHistory: [],\n  contactCount: 0\n};\n\nif (preferredChannel === 'none') {\n  console.log(`No contact info for lead ${lead.ID}`);\n  return [{ json: { skip: true, leadId: lead.ID, reason: 'No contact info' } }];\n}\n\nreturn [{ json: context }];"
+      }
+    },
+    {
+      "id": "check-skip-lead-001",
+      "name": "Check Skip Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1060, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "shouldSkip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "generate-initial-kp-001",
+      "name": "Generate Initial KP",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 100],
+      "parameters": {
+        "functionCode": "// Генерируем персонализированное КП\nconst context = $json;\n\n// Базовый шаблон КП\nlet message = `Добрый день! 👋\\n\\nМеня зовут Александр, я руководитель отдела продаж Dark Project Arena.\\n\\n`;\n\nif (context.isChain) {\n  message += `Заметил, что у вас сеть компьютерных клубов \"${context.clubName}\". `;\n  message += `Работаем с крупными сетями и знаем их специфику.\\n\\n`;\n} else {\n  message += `Обращаюсь к вам как к владельцу клуба \"${context.clubName}\". `;\n}\n\nmessage += `🎮 Специальное предложение для клубов ${context.city || 'вашего города'}:\\n\\n`;\nmessage += `✅ Игровые мыши Dark Project - от 2500₽\\n`;\nmessage += `✅ Механические клавиатуры - от 3500₽\\n`;\nmessage += `✅ Гарантия 2 года (замена за 24ч)\\n`;\nmessage += `✅ Скидка 20% от ${context.estimatedPCs >= 50 ? '50' : '30'} единиц\\n\\n`;\n\nif (context.estimatedPCs > 30) {\n  message += `При парке в ${context.estimatedPCs} ПК экономия составит более 150 000₽/год на замене периферии.\\n\\n`;\n}\n\nmessage += `Могу выслать подробное КП с расчетом для вашего клуба?`;\n\n// Добавляем подпись с контактами\nmessage += `\\n\\n--\\nС уважением,\\nАлександр Петров\\nDark Project Arena\\n📱 +7 (495) 123-45-67`;\n\nreturn [{\n  json: {\n    ...context,\n    initialMessage: message,\n    messageType: 'initial_kp'\n  }\n}];"
+      }
+    },
+    {
+      "id": "detect-contact-change-001", 
+      "name": "Detect Contact Change Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2060, 200],
+      "parameters": {
+        "functionCode": "// Проверяем, просит ли клиент написать на другой контакт\nconst agentResponse = $json;\nconst context = $node['Prepare Agent Context'].json;\nconst currentMessage = context.currentMessage || '';\n\n// Паттерны для определения запроса смены контакта\nconst patterns = [\n  /напиш[и|ите]?\\s+на\\s+(\\+?[0-9\\s\\-\\(\\)]+)/i,\n  /лучше\\s+на\\s+(\\+?[0-9\\s\\-\\(\\)]+)/i,\n  /мой\\s+телеграм\\s*[@]?([a-zA-Z0-9_]+)/i,\n  /пиши\\s+в\\s+телеграм\\s*[@]?([a-zA-Z0-9_]+)/i,\n  /на\\s+почту\\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/i,\n  /мой\\s+email\\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/i\n];\n\nlet newContactInfo = null;\nlet newContactType = null;\nlet newContactValue = null;\n\nfor (const pattern of patterns) {\n  const match = currentMessage.match(pattern);\n  if (match) {\n    newContactValue = match[1];\n    if (pattern.toString().includes('телеграм')) {\n      newContactType = 'telegram';\n      newContactValue = newContactValue.startsWith('@') ? newContactValue : '@' + newContactValue;\n    } else if (pattern.toString().includes('email') || pattern.toString().includes('почту')) {\n      newContactType = 'email';\n    } else {\n      newContactType = 'phone';\n      newContactValue = newContactValue.replace(/[^0-9+]/g, '');\n    }\n    break;\n  }\n}\n\nif (newContactType) {\n  newContactInfo = {\n    detected: true,\n    type: newContactType,\n    value: newContactValue,\n    leadId: context.leadId\n  };\n}\n\nreturn [{\n  json: {\n    ...agentResponse,\n    newContactInfo: newContactInfo\n  }\n}];"
+      }
+    },
+    {
+      "id": "route-contact-update-001",
+      "name": "Route Contact Update", 
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2260, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasNewContact",
+              "leftValue": "={{ $json.newContactInfo?.detected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "update-contact-in-crm-001",
+      "name": "Update Contact in CRM",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [2460, 100],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.newContactInfo.leadId }}",
+        "updateFields": {
+          "fields": "={{ $json.newContactInfo.type === 'telegram' ? { UF_CRM_TELEGRAM: $json.newContactInfo.value, UF_CRM_PREFERRED_CHANNEL: 'telegram' } : $json.newContactInfo.type === 'email' ? { EMAIL: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'email' } : { PHONE: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'phone' } }}",
+          "COMMENTS": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Клиент предоставил новый контакт: ' + $json.newContactInfo.type + ' - ' + $json.newContactInfo.value }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "send-to-new-contact-001",
+      "name": "Send to New Contact",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2660, 100],
+      "parameters": {
+        "functionCode": "// Подготавливаем отправку на новый контакт\nconst data = $json;\nconst newContact = data.newContactInfo;\n\n// Формируем сообщение для нового канала\nlet confirmMessage = `Спасибо! Продублирую информацию на ${newContact.value} 👍`;\nlet redirectMessage = data.agentResponse; // Используем ответ агента\n\nreturn [{\n  json: {\n    ...data,\n    confirmMessage: confirmMessage,\n    redirectMessage: redirectMessage,\n    shouldSendToNewContact: true,\n    newChannel: newContact.type,\n    newContactValue: newContact.value\n  }\n}];"
+      }
     }
   ],
   "connections": {
@@ -575,7 +751,7 @@
       "main": [[{"node": "Parse Agent Response", "type": "main", "index": 0}]]
     },
     "Parse Agent Response": {
-      "main": [[{"node": "Update CRM Dialog History", "type": "main", "index": 0}]]
+      "main": [[{"node": "Detect Contact Change Request", "type": "main", "index": 0}]]
     },
     "Update CRM Dialog History": {
       "main": [[{"node": "Should Update Status?", "type": "main", "index": 0}]]
@@ -612,7 +788,49 @@
     },
     "Handle Error": {
       "main": [[{"node": "Save Error", "type": "main", "index": 0}]]
-    }
+    },
+    "Bitrix24 New Leads Schedule": {
+      "main": [[{"node": "Get New Leads from CRM", "type": "main", "index": 0}]]
+    },
+    "Get New Leads from CRM": {
+      "main": [[{"node": "Split New Leads", "type": "main", "index": 0}]]
+    },
+    "Split New Leads": {
+      "main": [[{"node": "Prepare Initial Contact", "type": "main", "index": 0}]]
+    },
+    "Prepare Initial Contact": {
+      "main": [[{"node": "Check Skip Lead", "type": "main", "index": 0}]]
+    },
+    "Check Skip Lead": {
+      "main": [
+        [{"node": "Generate Initial KP", "type": "main", "index": 0}],
+        [{"node": "Complete", "type": "main", "index": 0}]
+      ]
+    },
+    "Generate Initial KP": {
+      "main": [[{"node": "Detect Contact Change Request", "type": "main", "index": 0}]]
+    },
+    "Detect Contact Change Request": {
+      "main": [[{"node": "Route Contact Update", "type": "main", "index": 0}]]
+    },
+         "Detect Contact Change Request": {
+       "main": [[{"node": "Route Contact Update", "type": "main", "index": 0}]]
+     },
+     "Route Contact Update": {
+       "main": [
+         [{"node": "Update Contact in CRM", "type": "main", "index": 0}],
+         [{"node": "Update CRM Dialog History", "type": "main", "index": 0}]
+       ]
+     },
+     "Update Contact in CRM": {
+       "main": [[{"node": "Send to New Contact", "type": "main", "index": 0}]]
+     },
+     "Send to New Contact": {
+       "main": [[{"node": "Update CRM Dialog History", "type": "main", "index": 0}]]
+     },
+     "Generate Initial KP": {
+       "main": [[{"node": "Send Telegram Message", "type": "main", "index": 0}]]
+     }
   },
   "active": false,
   "settings": {
