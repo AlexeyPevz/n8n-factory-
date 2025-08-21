@@ -184,7 +184,7 @@
       "typeVersion": 1,
       "position": [1860, 150],
       "parameters": {
-        "model": "text-embedding-ada-002"
+        "model": "text-embedding-3-small"
       },
       "credentials": {
         "openAiApi": {

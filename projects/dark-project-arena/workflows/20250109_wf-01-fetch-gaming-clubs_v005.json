@@ -76,7 +76,8 @@
       "parameters": {
         "method": "GET",
         "url": "https://search-maps.yandex.ru/v1/",
-        "authentication": "none",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpQueryAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -98,7 +99,7 @@
             },
             {
               "name": "apikey",
-              "value": "={{ $env.YANDEX_MAPS_API_KEY }}"
+              "value": "={{ $credentials.queryParameter || 'YANDEX_MAPS_API_KEY' }}"
             }
           ]
         },
@@ -122,7 +123,8 @@
       "parameters": {
         "method": "GET",
         "url": "https://catalog.api.2gis.com/3.0/items",
-        "authentication": "none",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpQueryAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -148,7 +150,7 @@
             },
             {
               "name": "key",
-              "value": "={{ $env.TWOGIS_API_KEY }}"
+              "value": "={{ $credentials.queryParameter || 'TWOGIS_API_KEY' }}"
             },
             {
               "name": "city_id",

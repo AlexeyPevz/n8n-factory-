@@ -168,9 +168,9 @@
           "responsible_id": "={{ $env.ACCOUNT_MANAGER_ID }}",
           "priority": "1",
           "crm": {
-            "deal": ["{{ $json.dealId }}"]
+            "deal": ["={{ $json.dealId }}"]
           },
-          "tags": ["followup", "post-sale", "{{ $json.type }}"]
+          "tags": ["followup", "post-sale", "={{ $json.type }}"]
         }
       },
       "credentials": {
@@ -198,11 +198,11 @@
               [
                 {
                   "text": "📞 Позвонить",
-                  "url": "tel:{{$node['Prepare Followup Data'].json.contactPhone}}"
+                  "url": "={{ `tel:${$node['Prepare Followup Data'].json.contactPhone}` }}"
                 },
                 {
                   "text": "💬 Telegram",
-                  "url": "https://t.me/{{$node['Prepare Followup Data'].json.telegram}}"
+                  "url": "={{ `https://t.me/${$node['Prepare Followup Data'].json.telegram}` }}"
                 }
               ]
             ]
