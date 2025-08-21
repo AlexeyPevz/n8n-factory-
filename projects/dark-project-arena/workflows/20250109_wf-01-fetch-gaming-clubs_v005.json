@@ -97,10 +97,7 @@
               "name": "results",
               "value": "50"
             },
-            {
-              "name": "apikey",
-              "value": "={{ $credentials.queryParameter || 'YANDEX_MAPS_API_KEY' }}"
-            }
+            
           ]
         },
         "options": {
@@ -148,10 +145,7 @@
               "name": "fields",
               "value": "items.contact_groups,items.point,items.address_name,items.org,items.rubrics"
             },
-            {
-              "name": "key",
-              "value": "={{ $credentials.queryParameter || 'TWOGIS_API_KEY' }}"
-            },
+            
             {
               "name": "city_id",
               "value": "={{ $json.city_id_2gis || '' }}"
