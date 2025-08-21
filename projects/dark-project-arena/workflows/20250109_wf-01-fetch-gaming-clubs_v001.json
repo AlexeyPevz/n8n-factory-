@@ -1,0 +1,486 @@
+{
+  "name": "WF-01 Fetch Gaming Clubs",
+  "nodes": [
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "parameters": {}
+    },
+    {
+      "id": "schedule-trigger-001",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "set-search-params-001",
+      "name": "Set Search Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 400],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "searchQuery",
+              "value": "компьютерный клуб киберспорт"
+            }
+          ],
+          "number": [
+            {
+              "name": "cityIndex",
+              "value": 0
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cities-data-001",
+      "name": "Cities Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [700, 400],
+      "parameters": {
+        "functionCode": "const cities = [\n  {city: 'Москва', region: 'Московская область'},\n  {city: 'Санкт-Петербург', region: 'Ленинградская область'},\n  {city: 'Новосибирск', region: 'Новосибирская область'},\n  {city: 'Екатеринбург', region: 'Свердловская область'},\n  {city: 'Казань', region: 'Республика Татарстан'},\n  {city: 'Нижний Новгород', region: 'Нижегородская область'},\n  {city: 'Челябинск', region: 'Челябинская область'},\n  {city: 'Самара', region: 'Самарская область'},\n  {city: 'Омск', region: 'Омская область'},\n  {city: 'Ростов-на-Дону', region: 'Ростовская область'}\n];\n\nconst cityIndex = $json.cityIndex || 0;\n\nif (cityIndex < cities.length) {\n  return [{\n    json: {\n      ...cities[cityIndex],\n      searchQuery: $json.searchQuery,\n      cityIndex: cityIndex,\n      totalCities: cities.length,\n      hasMore: cityIndex < cities.length - 1\n    }\n  }];\n} else {\n  return [{\n    json: {\n      completed: true,\n      totalProcessed: cities.length\n    }\n  }];\n}"
+      }
+    },
+    {
+      "id": "check-completed-001",
+      "name": "Check if Completed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 400],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.completed}}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-yandex-001",
+      "name": "Fetch Yandex Maps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1100, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://search-maps.yandex.ru/v1/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{$json.searchQuery}} {{$json.city}}"
+            },
+            {
+              "name": "type",
+              "value": "biz"
+            },
+            {
+              "name": "lang",
+              "value": "ru_RU"
+            },
+            {
+              "name": "results",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YANDEX_MAPS_API",
+          "name": "Yandex Maps API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "http-2gis-001", 
+      "name": "Fetch 2GIS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1100, 500],
+      "parameters": {
+        "method": "GET",
+        "url": "https://catalog.api.2gis.com/3.0/items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.searchQuery}}"
+            },
+            {
+              "name": "city",
+              "value": "={{$json.city}}"
+            },
+            {
+              "name": "type",
+              "value": "branch"
+            },
+            {
+              "name": "page_size",
+              "value": "50"
+            },
+            {
+              "name": "fields",
+              "value": "items.contact_groups,items.point,items.address_name,items.org"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2GIS_API",
+          "name": "2GIS API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "parse-process-001",
+      "name": "Parse and Process Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1300, 400],
+      "parameters": {
+        "functionCode": "const cityData = $('Cities Data').first().json;\nconst yandexData = $('Fetch Yandex Maps').first().json;\nconst twoGisData = $('Fetch 2GIS').first().json;\nconst clubs = [];\n\n// Parse Yandex results\nif (yandexData.features && Array.isArray(yandexData.features)) {\n  for (const feature of yandexData.features) {\n    const props = feature.properties || {};\n    const meta = props.CompanyMetaData || {};\n    const phones = (meta.Phones || []).map(p => p.formatted).filter(Boolean);\n    \n    clubs.push({\n      name: props.name || '',\n      address: props.address?.formatted || '',\n      phone: phones[0] || '',\n      additionalPhones: phones.slice(1),\n      city: cityData.city,\n      region: cityData.region,\n      source: 'YandexMaps',\n      coordinates: {\n        lat: feature.geometry?.coordinates?.[1] || 0,\n        lon: feature.geometry?.coordinates?.[0] || 0\n      },\n      url: meta.url || '',\n      workingHours: meta.Hours?.text || '',\n      categories: (meta.Categories || []).map(c => c.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Parse 2GIS results\nif (twoGisData.result?.items && Array.isArray(twoGisData.result.items)) {\n  for (const item of twoGisData.result.items) {\n    const contacts = {};\n    \n    // Extract contacts\n    for (const group of (item.contact_groups || [])) {\n      for (const contact of (group.contacts || [])) {\n        if (!contacts[contact.type]) {\n          contacts[contact.type] = [];\n        }\n        contacts[contact.type].push(contact.value);\n      }\n    }\n    \n    clubs.push({\n      name: item.name || '',\n      address: item.address_name || '',\n      phone: (contacts.phone || [])[0] || '',\n      additionalPhones: (contacts.phone || []).slice(1),\n      email: (contacts.email || [])[0] || '',\n      city: cityData.city,\n      region: cityData.region,\n      source: '2GIS',\n      isChain: (item.org?.branch_count || 0) > 1,\n      brand: item.org?.name || '',\n      branchCount: item.org?.branch_count || 1,\n      coordinates: {\n        lat: item.point?.lat || 0,\n        lon: item.point?.lon || 0\n      },\n      url: (contacts.website || [])[0] || '',\n      telegram: (contacts.telegram || [])[0] || '',\n      rubrics: (item.rubrics || []).map(r => r.name).join(', '),\n      foundAt: new Date().toISOString()\n    });\n  }\n}\n\n// Deduplicate\nconst uniqueClubs = [];\nconst seen = new Set();\n\nfor (const club of clubs) {\n  if (club.name && club.address) {\n    const key = `${club.name.toLowerCase().trim()}_${club.address.toLowerCase().trim()}`;\n    if (!seen.has(key)) {\n      seen.add(key);\n      uniqueClubs.push(club);\n    }\n  }\n}\n\n// Return clubs for Redis save\nreturn uniqueClubs.map(club => ({\n  json: {\n    key: `club:${cityData.city.replace(/\\s+/g, '_')}:${club.name.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_')}`,\n    value: JSON.stringify(club),\n    ttl: 30 * 24 * 60 * 60,\n    club: club,\n    cityData: cityData\n  }\n}));"
+      }
+    },
+    {
+      "id": "redis-save-001",
+      "name": "Save to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1500, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{$json.key}}",
+        "value": "={{$json.value}}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": "={{$json.ttl}}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "trigger-enrichment-001",
+      "name": "Trigger Enrichment",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1700, 400],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{$env.WF_02_WORKFLOW_ID}}"
+      }
+    },
+    {
+      "id": "increment-city-001",
+      "name": "Increment City Index",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1900, 400],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "searchQuery",
+              "value": "={{$('Cities Data').first().json.searchQuery}}"
+            }
+          ],
+          "number": [
+            {
+              "name": "cityIndex",
+              "value": "={{$('Cities Data').first().json.cityIndex + 1}}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-001",
+      "name": "Wait 5 seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2100, 400],
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "summary-001",
+      "name": "Create Summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1100, 700],
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    workflow: 'WF-01 Fetch Gaming Clubs',\n    status: 'completed',\n    totalCities: $json.totalProcessed,\n    completedAt: new Date().toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "telegram-notify-001",
+      "name": "Notify Completion",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1300, 700],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{$env.TELEGRAM_ADMIN_CHAT_ID}}",
+        "text": "={\u007b`✅ WF-01 Fetch Gaming Clubs completed\\n\\nProcessed ${$json.totalCities} cities\\nCompleted at: ${new Date($json.completedAt).toLocaleString('ru-RU')}`\u007d}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1500, 900],
+      "parameters": {}
+    },
+    {
+      "id": "error-notify-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1700, 900],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{$env.TELEGRAM_ADMIN_CHAT_ID}}",
+        "text": "={\u007b`❌ Error in WF-01 Fetch Gaming Clubs\\n\\nError: ${$json.error?.message || 'Unknown error'}\\nNode: ${$json.error?.node?.name || 'Unknown'}\\nTime: ${new Date().toISOString()}`\u007d}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Search Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Set Search Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Search Parameters": {
+      "main": [
+        [
+          {
+            "node": "Cities Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cities Data": {
+      "main": [
+        [
+          {
+            "node": "Check if Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Completed": {
+      "main": [
+        [
+          {
+            "node": "Fetch Yandex Maps",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch 2GIS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Yandex Maps": {
+      "main": [
+        [
+          {
+            "node": "Parse and Process Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch 2GIS": {
+      "main": [
+        [
+          {
+            "node": "Parse and Process Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Process Results": {
+      "main": [
+        [
+          {
+            "node": "Save to Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Redis": {
+      "main": [
+        [
+          {
+            "node": "Trigger Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Increment City Index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment City Index": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 seconds": {
+      "main": [
+        [
+          {
+            "node": "Cities Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Summary": {
+      "main": [
+        [
+          {
+            "node": "Notify Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01b6d63b-1212-4a56-8764-76e7ac6e3c1e",
+  "id": "wf-01-fetch-gaming-clubs",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
