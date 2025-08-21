@@ -81,11 +81,30 @@
 ## 5. Интеграции и учетные данные
 | Интеграция | Тип | Секрет/Учётка | Scope |
 |------------|-----|---------------|-------|
-| Bitrix24 Cloud | OAuth2 | `BITRIX24_CRM` | CRM.leads, deals, contacts |
+| Bitrix24 Cloud | OAuth2 + Webhook | `BITRIX24_CRM`, `BITRIX24_WEBHOOK_SECRET` | CRM.leads, deals, contacts |
 | Telegram | Bot Token **или** user-session (MTProto) | `TG_ROP_BOT` | Send/receive messages |
 | OpenAI / Ollama | API Key | `LLM_KEY` | GPT-4o, embeddings |
 | Qdrant | HTTP | `KB_QDRANT` | Vector storage (RAG для WF-04) |
-| Redis | Internal | — | Dedup & queue |
+| Redis | Internal | `REDIS_INTERNAL` | Dedup & queue |
+
+### 5.1. Зависимости от Community Nodes
+**Внимание**: Проект использует следующие community nodes, которые необходимо установить:
+
+| Node | Package | Версия | Использование |
+|------|---------|--------|---------------|
+| Redis | `@n8n_io/n8n-nodes-redis` | latest | WF-00, WF-01, WF-02, WF-04 |
+| Qdrant Vector Store | `@n8n/n8n-nodes-langchain` | latest | WF-04 (RAG) |
+
+**Установка**:
+```bash
+npm install @n8n_io/n8n-nodes-redis @n8n/n8n-nodes-langchain
+```
+
+**Настройка Bitrix24 Webhooks**:
+1. В Bitrix24 перейти в Приложения → Вебхуки
+2. Создать исходящий вебхук для событий CRM
+3. URL: `https://your-n8n.domain/webhook/bitrix24-lead-update`
+4. Добавить секретный заголовок для безопасности
 
 ## 6. База знаний (KB)
 1. **Тех. характеристики**: вся линейка Dark Project Arena, спецификации, гарантии.  

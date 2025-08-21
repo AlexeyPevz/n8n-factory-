@@ -253,7 +253,9 @@
         "resource": "lead",
         "operation": "update",
         "leadId": "={{ $json.id }}",
-        "updateFields": "={{ $json.fields }}"
+        "updateFields": {
+          "fields": "={{ $json.fields }}"
+        }
       },
       "credentials": {
         "bitrix24Api": {

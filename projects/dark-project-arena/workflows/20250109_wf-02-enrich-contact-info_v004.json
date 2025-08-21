@@ -4,7 +4,7 @@
     {
       "id": "redis-trigger-001",
       "name": "Redis Key Event",
-      "type": "n8n-nodes-base.redisTrigger",
+      "type": "n8n-nodes-base.redistrigger",
       "typeVersion": 1,
       "position": [260, 300],
       "parameters": {
