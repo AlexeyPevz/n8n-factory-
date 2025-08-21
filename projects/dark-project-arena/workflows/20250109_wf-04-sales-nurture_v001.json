@@ -158,45 +158,17 @@
     },
     {
       "id": "send-telegram-001",
-      "name": "Send Telegram Message",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
+      "name": "MTProto Send Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [1660, 300],
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.context.telegram }}",
-        "text": "={{ $json.message }}",
-        "additionalFields": {
-          "parse_mode": "Markdown",
-          "reply_markup": {
-            "inline_keyboard": [
-              [
-                {
-                  "text": "🔥 Интересно, расскажите больше",
-                  "callback_data": "interested_more"
-                }
-              ],
-              [
-                {
-                  "text": "📋 Прислать прайс-лист",
-                  "callback_data": "request_price"
-                }
-              ],
-              [
-                {
-                  "text": "❌ Не интересует",
-                  "callback_data": "not_interested"
-                }
-              ]
-            ]
-          }
-        }
-      },
-      "credentials": {
-        "telegramApi": {
-          "id": "TG_ROP_BOT",
-          "name": "Telegram ROP Bot"
-        }
+        "method": "POST",
+        "url": "={{ $env.MTPROTO_BRIDGE_URL }}/send_message",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ { username: $json.context.telegram, text: $json.message, parseMode: 'Markdown' } }}",
+        "options": { "timeout": 30000 }
       },
       "continueOnFail": true
     },
