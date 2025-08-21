@@ -1,0 +1,427 @@
+{
+  "name": "WF-03 Upsert CRM",
+  "nodes": [
+    {
+      "id": "exec-trigger-001",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {}
+    },
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "webhook-trigger-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [260, 600],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upsert-crm",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "N8N_WEBHOOK_SECRET",
+          "name": "N8N Webhook Secret"
+        }
+      }
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 500],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "validate-input-001",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 500],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasRequiredData",
+              "leftValue": "={{ !!($json.enrichedClub?.name || $json.leadData?.title) && !!($json.enrichedClub?.phone || $json.leadData?.phone) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-search-001",
+      "name": "Prepare Search",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 400],
+      "parameters": {
+        "functionCode": "// Extract club data from various input formats\nconst enrichedClub = $json.enrichedClub || $json.leadData || $json;\n\nif (!enrichedClub.name && !enrichedClub.title) {\n  throw new Error('No club name found');\n}\n\nconst clubName = enrichedClub.name || enrichedClub.title;\nlet normalizedPhone = enrichedClub.phone || '';\n\n// Normalize phone number\nnormalizedPhone = normalizedPhone.replace(/[^0-9]/g, '');\nif (normalizedPhone.startsWith('8')) {\n  normalizedPhone = '7' + normalizedPhone.substring(1);\n}\n\nconst searchData = {\n  enrichedClub: enrichedClub,\n  searchPhone: normalizedPhone,\n  searchName: clubName.toLowerCase().trim(),\n  runId: $json.runId || `crm_${Date.now()}`\n};\n\nconsole.log(`Preparing CRM upsert for ${clubName}`);\n\nreturn [{ json: searchData }];"
+      }
+    },
+    {
+      "id": "bitrix24-search-001",
+      "name": "Search Duplicate in Bitrix24",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1060, 400],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "filters": {
+          "filter": {
+            "PHONE": "={{ $json.searchPhone }}"
+          }
+        },
+        "options": {
+          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "COMMENTS", "UF_CRM_ENRICHED_AT"],
+          "limit": 10
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "check-duplicate-001",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 400],
+      "parameters": {
+        "functionCode": "const searchResult = $input.all();\nconst leads = searchResult.length > 0 ? searchResult[0].json : [];\n\n// Check if we have any leads\nconst duplicateExists = Array.isArray(leads) && leads.length > 0;\nconst existingLead = duplicateExists ? leads[0] : null;\n\nconst output = {\n  duplicateExists,\n  existingLead,\n  searchData: $node['Prepare Search'].json\n};\n\nconsole.log(`Duplicate check: ${duplicateExists ? 'Found existing lead ID ' + existingLead?.ID : 'No duplicates found'}`);\n\nreturn [{ json: output }];"
+      }
+    },
+    {
+      "id": "route-action-001",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1460, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isDuplicate",
+              "leftValue": "={{ $json.duplicateExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-lead-create-001",
+      "name": "Prepare Lead Create",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 300],
+      "parameters": {
+        "functionCode": "const club = $json.searchData.enrichedClub;\n\n// Prepare phone array\nconst phones = [];\nif (club.phone) {\n  phones.push({ VALUE: club.phone, VALUE_TYPE: 'WORK' });\n}\nif (club.additionalPhones && Array.isArray(club.additionalPhones)) {\n  club.additionalPhones.forEach(p => {\n    if (p) phones.push({ VALUE: p, VALUE_TYPE: 'WORK' });\n  });\n}\n\n// Prepare email array\nconst emails = [];\nif (club.email) {\n  emails.push({ VALUE: club.email, VALUE_TYPE: 'WORK' });\n}\nif (club.additionalEmails && Array.isArray(club.additionalEmails)) {\n  club.additionalEmails.forEach(e => {\n    if (e) emails.push({ VALUE: e, VALUE_TYPE: 'WORK' });\n  });\n}\n\n// Build fields object\nconst fields = {\n  TITLE: club.name || club.title,\n  NAME: 'Владелец клуба',\n  STATUS_ID: 'NEW',\n  SOURCE_ID: 'WEB',\n  SOURCE_DESCRIPTION: `${club.source || 'n8n'} (${club.foundAt || new Date().toISOString()})`,\n  ADDRESS: club.address || '',\n  ADDRESS_CITY: club.city || '',\n  ADDRESS_PROVINCE: club.region || '',\n  PHONE: phones,\n  EMAIL: emails,\n  COMMENTS: `Компьютерный клуб\\n\\nДобавлен: ${new Date().toISOString()}\\nИсточник: ${club.source || 'n8n'}\\nСеть: ${club.isChain ? 'Да' : 'Нет'}\\nБренд: ${club.brand || 'Не указан'}\\nФилиалов: ${club.branchCount || 1}\\n\\nКонтакты:\\nTelegram: ${club.telegram || '-'}\\nVK: ${club.vk || '-'}\\nInstagram: ${club.instagram || '-'}\\nWebsite: ${club.url || '-'}\\n\\nРабочие часы: ${club.workingHours || 'Не указаны'}\\nКатегории: ${club.categories || club.rubrics || '-'}\\n\\nКоординаты: ${club.coordinates?.lat || 0},${club.coordinates?.lon || 0}\\nПриоритет: ${club.priority || 'medium'}\\nРелевантность: ${club.relevanceScore || 5}/10\\nПримерно ПК: ${club.estimatedPCs || 15}\\nLead Score: ${club.leadScore || 0}`\n};\n\n// Add custom fields if they exist in Bitrix24\nif (club.telegram) fields.UF_CRM_TELEGRAM = club.telegram;\nif (club.vk) fields.UF_CRM_VK = club.vk;\nif (club.instagram) fields.UF_CRM_INSTAGRAM = club.instagram;\nif (club.url) fields.UF_CRM_WEBSITE = club.url;\nif (club.isChain !== undefined) fields.UF_CRM_IS_CHAIN = club.isChain ? 'Y' : 'N';\nif (club.brand) fields.UF_CRM_BRAND = club.brand;\nif (club.branchCount) fields.UF_CRM_BRANCH_COUNT = club.branchCount;\nif (club.coordinates) fields.UF_CRM_COORDINATES = `${club.coordinates.lat},${club.coordinates.lon}`;\nif (club.priority) fields.UF_CRM_PRIORITY = club.priority;\nif (club.relevanceScore) fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore;\nif (club.estimatedPCs) fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs;\nif (club.workingHours) fields.UF_CRM_WORKING_HOURS = club.workingHours;\nif (club.enrichedAt) fields.UF_CRM_ENRICHED_AT = club.enrichedAt;\nif (club.leadScore) fields.UF_CRM_LEAD_SCORE = club.leadScore;\n\nreturn [{ json: { fields, enrichedClub: club } }];"
+      }
+    },
+    {
+      "id": "prepare-lead-update-001",
+      "name": "Prepare Lead Update",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 500],
+      "parameters": {
+        "functionCode": "const club = $json.searchData.enrichedClub;\nconst existing = $json.existingLead;\n\nconst fields = {};\n\n// Update status if it was JUNK\nif (existing?.STATUS_ID === 'JUNK') {\n  fields.STATUS_ID = 'NEW';\n}\n\n// Update comments with new information\nconst timestamp = new Date().toISOString();\nfields.COMMENTS = (existing?.COMMENTS || '') + `\\n\\n[${timestamp}] Обновлено из WF-03\\nИсточник: ${club.source || 'n8n'}`;\n\n// Update contact information if we have new data\nif (club.email && !existing?.EMAIL) {\n  fields.EMAIL = [{ VALUE: club.email, VALUE_TYPE: 'WORK' }];\n}\n\n// Update custom fields with new data\nif (club.telegram) fields.UF_CRM_TELEGRAM = club.telegram;\nif (club.vk) fields.UF_CRM_VK = club.vk;\nif (club.instagram) fields.UF_CRM_INSTAGRAM = club.instagram;\nif (club.priority) fields.UF_CRM_PRIORITY = club.priority;\nif (club.relevanceScore) fields.UF_CRM_RELEVANCE_SCORE = club.relevanceScore;\nif (club.estimatedPCs) fields.UF_CRM_ESTIMATED_PCS = club.estimatedPCs;\nif (club.leadScore) fields.UF_CRM_LEAD_SCORE = club.leadScore;\nfields.UF_CRM_ENRICHED_AT = club.enrichedAt || timestamp;\n\n// Log update\nconsole.log(`Updating lead ${existing.ID} with new data`);\n\nreturn [{ \n  json: { \n    id: existing.ID,\n    fields,\n    enrichedClub: club,\n    action: 'update'\n  } \n}];"
+      }
+    },
+    {
+      "id": "bitrix24-create-001",
+      "name": "Create New Lead",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1860, 300],
+      "parameters": {
+        "resource": "lead",
+        "operation": "create",
+        "additionalFields": "={{ $json.fields }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "bitrix24-update-001",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1860, 500],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.id }}",
+        "updateFields": "={{ $json.fields }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "merge-result-001",
+      "name": "Merge CRM Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2060, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-response-001",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2260, 400],
+      "parameters": {
+        "functionCode": "// Determine if this was a create or update\nconst isUpdate = $json.action === 'update';\nconst leadId = $json.id || $json.ID || $json.result;\nconst club = $json.enrichedClub || $node['Prepare Search'].json.enrichedClub;\n\nconst response = {\n  success: true,\n  action: isUpdate ? 'updated' : 'created',\n  leadId: leadId,\n  clubName: club.name || club.title,\n  clubCity: club.city,\n  priority: club.priority,\n  relevanceScore: club.relevanceScore,\n  estimatedPCs: club.estimatedPCs,\n  leadScore: club.leadScore,\n  enrichedFields: {\n    email: !!club.email,\n    telegram: !!club.telegram,\n    vk: !!club.vk,\n    instagram: !!club.instagram\n  },\n  timestamp: new Date().toISOString()\n};\n\nconsole.log(`CRM ${response.action}: Lead ${response.leadId} for ${response.clubName}`);\n\nreturn [{ json: response }];"
+      }
+    },
+    {
+      "id": "log-activity-001",
+      "name": "Log CRM Activity",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2460, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `crm_activity:${$json.leadId}:${Date.now()}` }}",
+        "value": "={{ JSON.stringify($json) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 7776000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "route-response-001",
+      "name": "Route Response",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2660, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isWebhook",
+              "leftValue": "={{ $node['Webhook Trigger'].json ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-webhook-001",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2860, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $node['Prepare Response'].json }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "return-data-001",
+      "name": "Return Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2860, 500],
+      "parameters": {
+        "functionCode": "// Return data for executeWorkflow calls\nreturn [$node['Prepare Response'].json];"
+      }
+    },
+    {
+      "id": "respond-invalid-001",
+      "name": "Respond Invalid",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 600],
+      "parameters": {
+        "functionCode": "const error = {\n  success: false,\n  error: 'Invalid input data. Name/title and phone are required.',\n  receivedData: {\n    hasName: !!($json.enrichedClub?.name || $json.leadData?.title),\n    hasPhone: !!($json.enrichedClub?.phone || $json.leadData?.phone)\n  },\n  timestamp: new Date().toISOString()\n};\n\nconsole.error('WF-03 Validation Error:', error);\n\nreturn [{ json: error }];"
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 800],
+      "parameters": {}
+    },
+    {
+      "id": "handle-error-001",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 800],
+      "parameters": {
+        "functionCode": "const error = {\n  workflow: 'WF-03 Upsert CRM',\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  timestamp: new Date().toISOString()\n};\n\nconsole.error('WF-03 Error:', error);\n\nreturn [{ json: { success: false, ...error } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Webhook Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 2}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Validate Input", "type": "main", "index": 0}]]
+    },
+    "Validate Input": {
+      "main": [
+        [{"node": "Prepare Search", "type": "main", "index": 0}],
+        [{"node": "Respond Invalid", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare Search": {
+      "main": [[{"node": "Search Duplicate in Bitrix24", "type": "main", "index": 0}]]
+    },
+    "Search Duplicate in Bitrix24": {
+      "main": [[{"node": "Check Duplicate", "type": "main", "index": 0}]]
+    },
+    "Check Duplicate": {
+      "main": [[{"node": "Route Action", "type": "main", "index": 0}]]
+    },
+    "Route Action": {
+      "main": [
+        [{"node": "Prepare Lead Update", "type": "main", "index": 0}],
+        [{"node": "Prepare Lead Create", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare Lead Create": {
+      "main": [[{"node": "Create New Lead", "type": "main", "index": 0}]]
+    },
+    "Prepare Lead Update": {
+      "main": [[{"node": "Update Existing Lead", "type": "main", "index": 0}]]
+    },
+    "Create New Lead": {
+      "main": [[{"node": "Merge CRM Result", "type": "main", "index": 0}]]
+    },
+    "Update Existing Lead": {
+      "main": [[{"node": "Merge CRM Result", "type": "main", "index": 1}]]
+    },
+    "Merge CRM Result": {
+      "main": [[{"node": "Prepare Response", "type": "main", "index": 0}]]
+    },
+    "Prepare Response": {
+      "main": [[{"node": "Log CRM Activity", "type": "main", "index": 0}]]
+    },
+    "Log CRM Activity": {
+      "main": [[{"node": "Route Response", "type": "main", "index": 0}]]
+    },
+    "Route Response": {
+      "main": [
+        [{"node": "Respond to Webhook", "type": "main", "index": 0}],
+        [{"node": "Return Data", "type": "main", "index": 0}]
+      ]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120,
+    "timezone": "Europe/Moscow"
+  },
+  "version": 2,
+  "id": "wf-03-upsert-crm",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Upserts leads to Bitrix24 CRM with duplicate detection, supports multiple trigger types",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "5",
+      "name": "crm"
+    }
+  ]
+}
