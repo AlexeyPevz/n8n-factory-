@@ -1,0 +1,408 @@
+{
+  "name": "WF-00 Orchestrator",
+  "nodes": [
+    {
+      "id": "cron-001",
+      "name": "Waves Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            { 
+              "mode": "custom", 
+              "cronExpression": "0 2 * * *" 
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 450],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "get-current-wave-001",
+      "name": "Get Current Wave",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 450],
+      "parameters": {
+        "functionCode": "// Определяем текущую волну на основе даты\n// Можно также читать из Redis/конфига\nconst startDate = new Date('2025-01-01');\nconst currentDate = new Date();\nconst daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));\nconst currentWave = Math.min(Math.floor(daysSinceStart / 7) + 1, 10); // Новая волна каждую неделю, макс 10\n\nconst runId = `wave${currentWave}_${currentDate.toISOString().split('T')[0]}_${Date.now()}`;\n\nconsole.log(`Starting Orchestrator: Wave ${currentWave}, RunID: ${runId}`);\n\nreturn [{\n  json: {\n    currentWave,\n    runId,\n    startTime: new Date().toISOString(),\n    daysSinceStart\n  }\n}];"
+      }
+    },
+    {
+      "id": "load-csv-001",
+      "name": "Read Geo Targets CSV",
+      "type": "n8n-nodes-base.readBinaryFiles",
+      "typeVersion": 1,
+      "position": [860, 450],
+      "parameters": {
+        "fileSelector": "/workspace/projects/dark-project-arena/data/geo_targets.csv"
+      }
+    },
+    {
+      "id": "parse-csv-001",
+      "name": "Parse CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1060, 450],
+      "parameters": {
+        "fileFormat": "csv",
+        "options": {
+          "headerRow": true,
+          "delimiter": ",",
+          "includeEmptyCells": false,
+          "rawData": false,
+          "readAsString": false
+        }
+      }
+    },
+    {
+      "id": "filter-wave-001",
+      "name": "Filter Current Wave Cities",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [1260, 450],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.priority_wave }}",
+              "operation": "equal",
+              "value2": "={{ $node['Get Current Wave'].json.currentWave }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "add-metadata-001",
+      "name": "Add Metadata to Cities",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1460, 450],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "runId",
+              "name": "runId",
+              "type": "string",
+              "value": "={{ $node['Get Current Wave'].json.runId }}"
+            },
+            {
+              "id": "wave",
+              "name": "wave",
+              "type": "number",
+              "value": "={{ $node['Get Current Wave'].json.currentWave }}"
+            },
+            {
+              "id": "queuePriority",
+              "name": "queuePriority",
+              "type": "number",
+              "value": "={{ 1000000 - $json.population }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "split-cities-001",
+      "name": "Split Cities for Queue",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1660, 450],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "create-task-json-001",
+      "name": "Create Task JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1860, 450],
+      "parameters": {
+        "functionCode": "// Создаем задачу для очереди\nconst task = {\n  taskId: `task_${$json.runId}_${$json.city.replace(/\\s+/g, '_')}`,\n  type: 'FETCH_GAMING_CLUBS',\n  priority: $json.queuePriority,\n  createdAt: new Date().toISOString(),\n  data: {\n    city: $json.city,\n    region: $json.region,\n    federal_district: $json.federal_district,\n    population: $json.population,\n    lat: $json.lat,\n    lon: $json.lon,\n    country: $json.country,\n    club_presence_score: $json.club_presence_score,\n    city_id_2gis: $json.city_id_2gis,\n    priority_wave: $json.priority_wave,\n    runId: $json.runId,\n    wave: $json.wave\n  },\n  retries: 0,\n  maxRetries: 3\n};\n\nreturn [{ json: task }];"
+      }
+    },
+    {
+      "id": "push-to-redis-queue-001",
+      "name": "Push to Redis Queue",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2060, 450],
+      "parameters": {
+        "operation": "push",
+        "list": "queue:gaming_clubs:tasks",
+        "messageData": "={{ JSON.stringify($json) }}",
+        "tail": false
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "wait-rate-limit-001",
+      "name": "Queue Rate Limit",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2260, 450],
+      "parameters": {
+        "amount": 0.1,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "create-wave-summary-001",
+      "name": "Create Wave Summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1860, 650],
+      "parameters": {
+        "functionCode": "const splitContext = $node['Split Cities for Queue'].context;\nconst waveData = $node['Get Current Wave'].json;\nconst totalCities = splitContext?.maxRunIndex || 0;\n\nconst summary = {\n  runId: waveData.runId,\n  wave: waveData.currentWave,\n  totalCities,\n  queuedAt: new Date().toISOString(),\n  elapsedSeconds: Math.floor((Date.now() - new Date(waveData.startTime)) / 1000)\n};\n\nreturn [{ json: summary }];"
+      }
+    },
+    {
+      "id": "save-wave-metadata-001",
+      "name": "Save Wave Metadata",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2060, 650],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `wave:${$json.runId}:metadata` }}",
+        "value": "={{ JSON.stringify($json) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 604800
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "start-workers-001",
+      "name": "Start Worker Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2260, 650],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_WEBHOOK_URL }}/webhook/start-workers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{ $env.WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  \"runId\": $json.runId,\n  \"wave\": $json.wave,\n  \"totalTasks\": $json.totalCities,\n  \"queueName\": \"queue:gaming_clubs:tasks\"\n} }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "notify-wave-start-001",
+      "name": "Notify Wave Started",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2460, 650],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `🚀 WF-00 Orchestrator\\n\\n✅ Волна ${$json.wave} запущена\\n📍 Городов: ${$json.totalCities}\\n🆔 RunID: ${$json.runId}\\n⏱ Время подготовки: ${$json.elapsedSeconds}с\\n\\nЗадачи добавлены в очередь Redis.` }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 800],
+      "parameters": {}
+    },
+    {
+      "id": "format-error-001",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 800],
+      "parameters": {
+        "functionCode": "const error = {\n  workflow: 'WF-00 Orchestrator',\n  timestamp: new Date().toISOString(),\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  runId: $node['Get Current Wave']?.json?.runId || 'No RunID',\n  stack: $json.error?.stack\n};\n\nconsole.error('Orchestrator Error:', error);\n\nreturn [{ json: error }];"
+      }
+    },
+    {
+      "id": "save-error-001",
+      "name": "Save Error to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [660, 800],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ `error:orchestrator:${Date.now()}` }}",
+        "value": "={{ JSON.stringify($json) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "notify-error-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [860, 800],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "={{ `❌ WF-00 Orchestrator Error\\n\\n🔴 ${$json.error}\\n📍 Node: ${$json.node}\\n🆔 RunID: ${$json.runId}\\n🕐 ${new Date($json.timestamp).toLocaleString('ru-RU')}` }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Waves Schedule": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Get Current Wave", "type": "main", "index": 0}]]
+    },
+    "Get Current Wave": {
+      "main": [[{"node": "Read Geo Targets CSV", "type": "main", "index": 0}]]
+    },
+    "Read Geo Targets CSV": {
+      "main": [[{"node": "Parse CSV", "type": "main", "index": 0}]]
+    },
+    "Parse CSV": {
+      "main": [[{"node": "Filter Current Wave Cities", "type": "main", "index": 0}]]
+    },
+    "Filter Current Wave Cities": {
+      "main": [[{"node": "Add Metadata to Cities", "type": "main", "index": 0}]]
+    },
+    "Add Metadata to Cities": {
+      "main": [[{"node": "Split Cities for Queue", "type": "main", "index": 0}]]
+    },
+    "Split Cities for Queue": {
+      "main": [
+        [{"node": "Create Task JSON", "type": "main", "index": 0}],
+        [{"node": "Create Wave Summary", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Task JSON": {
+      "main": [[{"node": "Push to Redis Queue", "type": "main", "index": 0}]]
+    },
+    "Push to Redis Queue": {
+      "main": [[{"node": "Queue Rate Limit", "type": "main", "index": 0}]]
+    },
+    "Queue Rate Limit": {
+      "main": [[{"node": "Split Cities for Queue", "type": "main", "index": 0}]]
+    },
+    "Create Wave Summary": {
+      "main": [[{"node": "Save Wave Metadata", "type": "main", "index": 0}]]
+    },
+    "Save Wave Metadata": {
+      "main": [[{"node": "Start Worker Workflows", "type": "main", "index": 0}]]
+    },
+    "Start Worker Workflows": {
+      "main": [[{"node": "Notify Wave Started", "type": "main", "index": 0}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Format Error", "type": "main", "index": 0}]]
+    },
+    "Format Error": {
+      "main": [[{"node": "Save Error to Redis", "type": "main", "index": 0}]]
+    },
+    "Save Error to Redis": {
+      "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "executionTimeout": 900
+  },
+  "version": 2,
+  "id": "wf-00-orchestrator",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Orchestrates geo waves with Redis Queue, dynamic wave selection, and correlation IDs",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    }
+  ]
+}
