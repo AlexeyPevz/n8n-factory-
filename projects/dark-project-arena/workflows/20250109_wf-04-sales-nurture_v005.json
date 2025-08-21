@@ -550,7 +550,7 @@
       "main": [[{"node": "Generate Message", "type": "main", "index": 0}]]
     },
     "Generate Message": {
-      "main": [[{"node": "Parse Message", "type": "main", "index": 0}]]
+      "main": [[{"node": "Generate Message (Retry IF)", "type": "main", "index": 0}]]
     },
     "Generate Message (Retry IF)": {
       "main": [
