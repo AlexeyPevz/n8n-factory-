@@ -1,0 +1,392 @@
+{
+  "name": "WF-02 Enrich Contact Info",
+  "nodes": [
+    {
+      "id": "redis-trigger-001",
+      "name": "Redis Key Event Trigger",
+      "type": "n8n-nodes-base.redisTrigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "trigger": "keyEvent",
+        "keyPrefix": "raw_club:",
+        "event": "set"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "get-club-data-001",
+      "name": "Get Club Data",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [460, 400],
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json.key }}",
+        "propertyName": "clubData"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "parse-json-001",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 400],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "club",
+              "name": "club",
+              "type": "object",
+              "value": "={{ JSON.parse($json.clubData) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "check-url-001",
+      "name": "Check if URL Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [860, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "urlExists",
+              "leftValue": "={{ $json.club.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "scrape-website-001",
+      "name": "Scrape Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.club.url }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "extract-contacts-001",
+      "name": "Extract Contacts",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1.1,
+      "position": [1260, 300],
+      "parameters": {
+        "extractionValues": {
+          "values": [
+            {
+              "key": "emails",
+              "cssSelector": "a[href^='mailto:']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "phones",
+              "cssSelector": "a[href^='tel:']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "telegram",
+              "cssSelector": "a[href*='t.me/'], a[href*='telegram.me/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "vk",
+              "cssSelector": "a[href*='vk.com/'], a[href*='vkontakte.ru/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            },
+            {
+              "key": "instagram",
+              "cssSelector": "a[href*='instagram.com/']",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "search-telegram-001",
+      "name": "Search in Telegram",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1060, 500],
+      "parameters": {
+        "functionCode": "// This is a placeholder for Telegram search logic\n// In production, this would search Telegram groups/channels\n// for mentions of the gaming club\n\nconst clubName = items[0].json.club.name;\nconst city = items[0].json.club.city;\n\n// Simulate finding Telegram contacts\nconst telegramContacts = [];\n\n// Search patterns\nconst searchPatterns = [\n  clubName,\n  clubName.replace(/[\\s-]/g, ''),\n  clubName.toLowerCase().replace(/[\\s-]/g, '_')\n];\n\n// In production, this would use Telegram API or scraping\n// to search for club mentions in gaming communities\n\nreturn [{\n  json: {\n    ...items[0].json,\n    telegramSearch: {\n      searched: true,\n      patterns: searchPatterns,\n      results: telegramContacts\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "merge-enriched-001",
+      "name": "Merge Enriched Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1460, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-enriched-001",
+      "name": "Prepare Enriched Club",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1660, 400],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "enrichedClub",
+              "name": "enrichedClub",
+              "type": "object",
+              "value": "={{ {\n  ...($node['Parse JSON'].json.club || {}),\n  email: $json.emails?.[0]?.replace('mailto:', '') || $node['Parse JSON'].json.club.email || '',\n  phone: $json.phones?.[0]?.replace('tel:', '') || $node['Parse JSON'].json.club.phone || '',\n  telegram: $json.telegram?.[0] || $node['Parse JSON'].json.club.telegram || '',\n  vk: $json.vk?.[0] || '',\n  instagram: $json.instagram?.[0] || '',\n  enrichedAt: new Date().toISOString(),\n  scrapeSuccess: $node['Scrape Website'].error === undefined\n} }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "execute-wf03-001",
+      "name": "Execute WF-03 Upsert CRM",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1860, 400],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.WF_03_WORKFLOW_ID }}",
+        "waitForSubWorkflow": true
+      }
+    },
+    {
+      "id": "update-redis-001",
+      "name": "Update Redis with Enriched Data",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2060, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'enriched_club:' + $json.enrichedClub.name.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_') + ':' + $json.enrichedClub.address.replace(/[^a-zA-Z0-9А-Яа-я]/g, '_') }}",
+        "value": "={{ JSON.stringify($json.enrichedClub) }}",
+        "keyType": "automatic",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "error-handler-001",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [2260, 600],
+      "parameters": {}
+    },
+    {
+      "id": "log-error-001",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2460, 600],
+      "parameters": {
+        "functionCode": "const error = items[0].json.error;\nconst context = {\n  workflow: 'WF-02 Enrich Contact Info',\n  node: error.node?.name,\n  message: error.message,\n  timestamp: new Date().toISOString(),\n  clubData: items[0].json.club || {}\n};\n\nconsole.error('Enrichment Error:', context);\n\nreturn [{ json: context }];"
+      }
+    }
+  ],
+  "connections": {
+    "Redis Key Event Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Club Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Club Data": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Check if URL Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if URL Exists": {
+      "main": [
+        [
+          {
+            "node": "Scrape Website",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search in Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Website": {
+      "main": [
+        [
+          {
+            "node": "Extract Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contacts": {
+      "main": [
+        [
+          {
+            "node": "Merge Enriched Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search in Telegram": {
+      "main": [
+        [
+          {
+            "node": "Merge Enriched Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Enriched Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Enriched Club",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Enriched Club": {
+      "main": [
+        [
+          {
+            "node": "Execute WF-03 Upsert CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute WF-03 Upsert CRM": {
+      "main": [
+        [
+          {
+            "node": "Update Redis with Enriched Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "version": 2,
+  "meta": {
+    "description": "Enriches gaming club data by scraping websites and searching for additional contact information",
+    "tags": ["enrichment", "web-scraping", "contact-discovery"]
+  }
+}
