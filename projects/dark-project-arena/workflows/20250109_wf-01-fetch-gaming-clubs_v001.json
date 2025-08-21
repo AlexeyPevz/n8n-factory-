@@ -88,6 +88,21 @@
       }
     },
     {
+      "id": "set-2gis-page-001",
+      "name": "Set 2GIS Page",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1000, 480],
+      "parameters": {
+        "values": {
+          "number": [
+            { "name": "page", "value": "={{ $json.page || 1 }}" },
+            { "name": "page_size", "value": 50 }
+          ]
+        }
+      }
+    },
+    {
       "id": "http-yandex-001",
       "name": "Fetch Yandex Maps",
       "type": "n8n-nodes-base.httpRequest",
@@ -162,6 +177,10 @@
               "value": "50"
             },
             {
+              "name": "page",
+              "value": "={{ $json.page || 1 }}"
+            },
+            {
               "name": "fields",
               "value": "items.contact_groups,items.point,items.address_name,items.org"
             },
@@ -182,6 +201,26 @@
         }
       },
       "continueOnFail": true
+    },
+    {
+      "id": "2gis-paging-001",
+      "name": "Compute 2GIS Paging",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1300, 520],
+      "parameters": {
+        "functionCode": "const page = $json.page || 1;\nconst pageSize = $json.page_size || 50;\nconst total = ($node['Fetch 2GIS'].json && $node['Fetch 2GIS'].json.result && $node['Fetch 2GIS'].json.result.total) ? $node['Fetch 2GIS'].json.result.total : 0;\nconst hasMore = page * pageSize < total;\nreturn [{ json: { page, nextPage: page + 1, pageSize, total, hasMore } }];"
+      }
+    },
+    {
+      "id": "if-2gis-hasmore-001",
+      "name": "2GIS Has More?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 520],
+      "parameters": {
+        "conditions": { "boolean": [ { "value1": "={{ $json.hasMore }}", "value2": true } ] }
+      }
     },
     {
       "id": "parse-process-001",
@@ -353,7 +392,7 @@
             "index": 0
           },
           {
-            "node": "Fetch 2GIS",
+            "node": "Set 2GIS Page",
             "type": "main",
             "index": 0
           }
@@ -367,6 +406,7 @@
         ]
       ]
     },
+    "Set 2GIS Page": { "main": [[ { "node": "Fetch 2GIS", "type": "main", "index": 0 } ]] },
     "Fetch Yandex Maps": {
       "main": [
         [
@@ -381,12 +421,19 @@
     "Fetch 2GIS": {
       "main": [
         [
-          {
-            "node": "Parse and Process Results",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Parse and Process Results", "type": "main", "index": 0 },
+          { "node": "Compute 2GIS Paging", "type": "main", "index": 0 }
         ]
+      ]
+    },
+    "Compute 2GIS Paging": {
+      "main": [
+        [ { "node": "2GIS Has More?", "type": "main", "index": 0 } ]
+      ]
+    },
+    "2GIS Has More?": {
+      "main": [
+        [ { "node": "Set 2GIS Page", "type": "main", "index": 0 } ]
       ]
     },
     "Parse and Process Results": {
