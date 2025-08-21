@@ -10,8 +10,23 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "hot-lead-handoff",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "responseCode": 200,
+          "responseData": "allEntries",
+          "responseHeaders": {
+            "entries": [
+              { "name": "X-Workflow", "value": "WF-05" }
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "N8N_WEBHOOK_SECRET",
+          "name": "N8N Webhook Secret"
+        }
       }
     },
     {

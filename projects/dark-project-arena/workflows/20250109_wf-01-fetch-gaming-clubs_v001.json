@@ -109,13 +109,12 @@
       "id": "http-yandex-001",
       "name": "Fetch Yandex Maps",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [1100, 300],
       "parameters": {
         "method": "GET",
         "url": "https://search-maps.yandex.ru/v1/",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -141,32 +140,22 @@
             }
           ]
         },
-        "options": {
-          "timeout": 30000,
-          "retryOnFail": true,
-          "maxTries": 3,
-          "allowUnauthorizedCerts": false
-        }
+        "options": { "timeout": 30000, "allowUnauthorizedCerts": false },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "YANDEX_MAPS_API",
-          "name": "Yandex Maps API"
-        }
-      },
+      "credentials": {},
       "continueOnFail": true
     },
     {
       "id": "http-2gis-001", 
       "name": "Fetch 2GIS",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [1100, 500],
       "parameters": {
         "method": "GET",
         "url": "https://catalog.api.2gis.com/3.0/items",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -200,19 +189,10 @@
             }
           ]
         },
-        "options": {
-          "timeout": 30000,
-          "retryOnFail": true,
-          "maxTries": 3,
-          "allowUnauthorizedCerts": false
-        }
+        "options": { "timeout": 30000, "allowUnauthorizedCerts": false },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "2GIS_API",
-          "name": "2GIS API"
-        }
-      },
+      "credentials": {},
       "continueOnFail": true
     },
     {

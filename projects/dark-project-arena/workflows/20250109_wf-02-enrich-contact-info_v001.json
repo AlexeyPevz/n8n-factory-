@@ -33,21 +33,13 @@
       "id": "http-scrape-001",
       "name": "Scrape Website",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [860, 300],
       "parameters": {
         "method": "GET",
         "url": "={{$json.club.url}}",
-        "options": {
-          "timeout": 60000,
-          "followRedirects": true,
-          "ignoreResponseCode": true
-        },
-        "settings": {
-          "retryOnFail": true,
-          "maxTries": 3,
-          "waitBetweenTries": 1000
-        }
+        "options": { "timeout": 60000, "followRedirects": true, "ignoreResponseCode": true },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       },
       "continueOnFail": true
     },
@@ -136,7 +128,7 @@
       "id": "http-upsert-crm-001",
       "name": "Call WF-03 Upsert CRM",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [1660, 400],
       "parameters": {
         "method": "POST",
@@ -144,9 +136,8 @@
         "jsonParameters": true,
         "sendBody": true,
         "bodyParametersJson": "={{ { enrichedClub: $json.enrichedClub } }}",
-        "options": {
-          "timeout": 30000
-        }
+        "options": { "timeout": 30000, "headerParameters": { "parameters": [ { "name": "X-Webhook-Secret", "value": "={{ $env.WEBHOOK_SECRET }}" } ] } },
+        "settings": { "retryOnFail": true, "maxTries": 3, "waitBetweenTries": 1000 }
       }
     },
     {

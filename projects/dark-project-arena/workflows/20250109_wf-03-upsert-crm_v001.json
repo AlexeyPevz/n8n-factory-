@@ -10,8 +10,24 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "upsert-crm",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "responseCode": 200,
+          "responseData": "allEntries",
+          "responseHeaders": {
+            "entries": [
+              { "name": "X-Workflow", "value": "WF-03" }
+            ]
+          },
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "N8N_WEBHOOK_SECRET",
+          "name": "N8N Webhook Secret"
+        }
       }
     },
     {
