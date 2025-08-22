@@ -255,7 +255,7 @@
       "position": [2860, 450],
       "parameters": {
         "source": "database",
-        "workflowId": "={{ $env.WF_01_WORKFLOW_ID }}",
+        "workflowId": "={{ $workflow.staticData.WORKFLOW_IDS.WF_01_WORKFLOW_ID }}",
         "waitForSubWorkflow": true
       },
       "continueOnFail": true
@@ -562,6 +562,29 @@
     "errorWorkflow": "",
     "executionTimeout": 3600,
     "timezone": "Europe/Moscow"
+  },
+  "staticData": {
+    "WORKFLOW_IDS": {
+      "WF_01_WORKFLOW_ID": "PLACEHOLDER_WF01_ID",
+      "WF_02_WORKFLOW_ID": "PLACEHOLDER_WF02_ID",
+      "WF_03_WORKFLOW_ID": "PLACEHOLDER_WF03_ID",
+      "WF_04_WORKFLOW_ID": "PLACEHOLDER_WF04_ID",
+      "WF_05_WORKFLOW_ID": "PLACEHOLDER_WF05_ID",
+      "WF_06_WORKFLOW_ID": "PLACEHOLDER_WF06_ID"
+    },
+    "TELEGRAM_ADMIN_CHAT_ID": "-1001234567890",
+    "GEO_TARGETS_CSV_PATH": "./data/geo_targets.csv",
+    "RATE_LIMITS": {
+      "MESSAGES_PER_MINUTE": 30,
+      "DELAY_BETWEEN_MESSAGES": 2,
+      "MAX_RETRIES": 3
+    },
+    "BUSINESS_HOURS": {
+      "START_HOUR": 9,
+      "END_HOUR": 18,
+      "TIMEZONE": "Europe/Moscow",
+      "WORKING_DAYS": [1, 2, 3, 4, 5]
+    }
   },
   "version": 2,
   "id": "wf-00-orchestrator",
