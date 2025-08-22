@@ -1,71 +1,110 @@
 # Переменные окружения для Dark Project Arena
 
-## Обязательные переменные
+## ⚠️ Важное изменение!
 
-### Workflow IDs
-- `WF_01_WORKFLOW_ID` - ID workflow для WF-01-Fetch-Gaming-Clubs
-- `WF_02_WORKFLOW_ID` - ID workflow для WF-02-Enrich-Contact-Info  
-- `WF_03_WORKFLOW_ID` - ID workflow для WF-03-Upsert-CRM
+**Конфигурационные переменные (workflow IDs, пути, лимиты) теперь хранятся в Static Data!**
 
-### API Credentials
-- `YANDEX_MAPS_API` - API ключ для Yandex Maps
-- `TWOGIS_API` - API ключ для 2GIS
-- `BITRIX24_CRM` - OAuth2 токен для Bitrix24
-- `BITRIX24_WEBHOOK_SECRET` - Секретный ключ для webhook Bitrix24
-- `LLM_KEY` - API ключ для OpenAI/Ollama
-- `TG_ROP_BOT` - Токен Telegram бота
-- `TELEGRAM_ADMIN_CHAT_ID` - ID чата админа в Telegram
+См. [STATIC_DATA_SETUP.md](./STATIC_DATA_SETUP.md) для настройки workflow IDs и других параметров.
 
-### Redis
-- `REDIS_INTERNAL` - Строка подключения к Redis (по умолчанию: redis://localhost:6379)
+## Что осталось в переменных окружения
 
-### Опциональные переменные
-- `GEO_TARGETS_CSV_PATH` - Путь к файлу с городами (по умолчанию: /workspace/projects/dark-project-arena/data/geo_targets.csv)
-- `N8N_WEBHOOK_SECRET` - Секретный заголовок для webhook авторизации
+Только **секретные данные** и **API ключи**:
 
-## Пример .env файла
+### 1. API интеграций
 
 ```bash
-# Workflow IDs (получить после импорта workflow в n8n)
-WF_01_WORKFLOW_ID=1
-WF_02_WORKFLOW_ID=2
-WF_03_WORKFLOW_ID=3
+# Yandex Maps API
+YANDEX_MAPS_API_KEY=your-yandex-api-key
 
-# API Keys
-YANDEX_MAPS_API=your_yandex_api_key
-TWOGIS_API=your_2gis_api_key
-BITRIX24_WEBHOOK_SECRET=your_secret_key
-LLM_KEY=your_openai_key
+# 2GIS API  
+TWOGIS_API_KEY=your-2gis-api-key
 
-# Telegram
-TG_ROP_BOT=your_telegram_bot_token
-TELEGRAM_ADMIN_CHAT_ID=-1001234567890
-
-# Redis
-REDIS_INTERNAL=redis://localhost:6379
-
-# Paths
-GEO_TARGETS_CSV_PATH=/workspace/projects/dark-project-arena/data/geo_targets.csv
-
-# Security
-N8N_WEBHOOK_SECRET=your_webhook_secret
+# OpenAI API
+OPENAI_API_KEY=sk-your-openai-key
 ```
 
-## Настройка Bitrix24 Custom Fields
+### 2. MTProto для Telegram
 
-Перед запуском проекта необходимо создать следующие пользовательские поля в Bitrix24:
+```bash
+# MTProto сервер (см. MTPROTO_SETUP.md)
+MTPROTO_API_URL=http://localhost:5000
+MTPROTO_API_TOKEN=your-mtproto-token
+MTPROTO_WEBHOOK_SECRET=your-webhook-secret
 
-1. `UF_CRM_TELEGRAM` - строка, Telegram контакт
-2. `UF_CRM_VK` - строка, VK страница
-3. `UF_CRM_INSTAGRAM` - строка, Instagram профиль
-4. `UF_CRM_WEBSITE` - строка, сайт компании
-5. `UF_CRM_IS_CHAIN` - да/нет, является ли сетью
-6. `UF_CRM_BRAND` - строка, название бренда
-7. `UF_CRM_BRANCH_COUNT` - число, количество филиалов
-8. `UF_CRM_COORDINATES` - строка, координаты (lat,lon)
-9. `UF_CRM_PRIORITY` - список (high, medium, low)
-10. `UF_CRM_RELEVANCE_SCORE` - число (1-10)
-11. `UF_CRM_ESTIMATED_PCS` - число, примерное количество ПК
-12. `UF_CRM_WORKING_HOURS` - строка, рабочие часы
-13. `UF_CRM_ENRICHED_AT` - дата/время, когда обогащены данные
-14. `UF_CRM_LEAD_SCORE` - число, скоринг лида
+# Telegram App credentials (получить на https://my.telegram.org)
+TELEGRAM_API_ID=12345678
+TELEGRAM_API_HASH=your-api-hash
+TELEGRAM_PHONE=+79991234567
+```
+
+### 3. WhatsApp Business API
+
+```bash
+# WhatsApp Business
+WHATSAPP_API_URL=https://api.whatsapp.com
+WHATSAPP_ACCESS_TOKEN=your-whatsapp-token
+WHATSAPP_PHONE_NUMBER_ID=your-phone-id
+```
+
+### 4. Сервисы хранения
+
+```bash
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password  # если установлен
+
+# Qdrant Vector Store
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=your-qdrant-key  # если установлен
+```
+
+## Настройка в n8n
+
+### Через UI (рекомендуется):
+1. Settings → Environment Variables
+2. Добавить каждую переменную
+3. Сохранить и перезапустить
+
+### Через .env файл:
+```bash
+# Создать файл .env в корне n8n
+cp .env.example .env
+# Отредактировать значения
+nano .env
+```
+
+### Через Docker Compose:
+```yaml
+services:
+  n8n:
+    environment:
+      - YANDEX_MAPS_API_KEY=${YANDEX_MAPS_API_KEY}
+      - TWOGIS_API_KEY=${TWOGIS_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # ... остальные переменные
+```
+
+## Credentials в n8n
+
+Большинство интеграций настраиваются через Credentials в UI n8n:
+
+1. **Bitrix24** → Credentials → New → Bitrix24 API
+2. **Redis** → Credentials → New → Redis
+3. **OpenAI** → Credentials → New → OpenAI API
+4. **SMTP** → Credentials → New → SMTP
+
+## Проверка переменных
+
+После настройки можно проверить в Function node:
+```javascript
+console.log('API Key exists:', !!$env.OPENAI_API_KEY);
+console.log('Workflow ID:', $workflow.staticData.WORKFLOW_IDS.WF_01_WORKFLOW_ID);
+```
+
+## Безопасность
+
+- ❌ НЕ коммитьте .env файлы
+- ❌ НЕ храните секреты в staticData
+- ✅ Используйте credentials для паролей
+- ✅ Ограничьте доступ к переменным окружения
