@@ -665,6 +665,18 @@
       }
     },
     {
+      "id": "rate-limit-001",
+      "name": "Rate Limit Protection",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [760, 200],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
       "id": "prepare-initial-contact-001",
       "name": "Prepare Initial Contact",
       "type": "n8n-nodes-base.function",
@@ -905,6 +917,9 @@
       "main": [[{"node": "Split New Leads", "type": "main", "index": 0}]]
     },
     "Split New Leads": {
+      "main": [[{"node": "Rate Limit Protection", "type": "main", "index": 0}]]
+    },
+    "Rate Limit Protection": {
       "main": [[{"node": "Prepare Initial Contact", "type": "main", "index": 0}]]
     },
     "Prepare Initial Contact": {
