@@ -2,9 +2,7 @@
 
 ## 🔐 Required Environment Variables
 
-**Конфигурационные переменные (workflow IDs, пути, лимиты) теперь хранятся в Static Data!**
-
-См. [STATIC_DATA_SETUP.md](./STATIC_DATA_SETUP.md) для настройки workflow IDs и других параметров.
+Все переменные окружения настраиваются через `.env` файл в папке n8n.
 
 ### 🆔 Workflow IDs
 ```bash
@@ -38,6 +36,17 @@ TWOGIS_API_KEY=your-2gis-api-key
 
 # OpenAI API
 OPENAI_API_KEY=sk-your-openai-key
+```
+
+### 3. Bitrix24 Integration
+
+```bash
+# Bitrix24 Webhook URL
+BITRIX24_WEBHOOK_URL=https://your-domain.bitrix24.ru/rest/1/your_webhook_key/
+
+# User IDs for task assignment
+SALES_MANAGER_ID=1
+ACCOUNT_MANAGER_ID=1
 ```
 
 ### 2. MTProto для Telegram
