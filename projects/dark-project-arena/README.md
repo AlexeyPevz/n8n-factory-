@@ -78,10 +78,11 @@ Google Sheets            # Внешнее управление данными
 
 ## 📚 Документация
 
-
 - [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Переменные окружения (только секреты)
 - [MTPROTO_SETUP.md](./MTPROTO_SETUP.md) - Настройка Telegram userbot
 - [WF-04-AGENT-DOCUMENTATION.md](./WF-04-AGENT-DOCUMENTATION.md) - Детали AI Agent
+- [BITRIX24_HTTP_GUIDE.md](./BITRIX24_HTTP_GUIDE.md) - Руководство по HTTP Request для Bitrix24
+- [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md) - Настройка Google Sheets
 
 ## ⚡ Быстрый старт
 
@@ -109,10 +110,10 @@ docker-compose up -d mtproto
    - `20250109_wf-00-orchestrator_v009.json`
    - `20250109_wf-01-fetch-gaming-clubs_v005.json`
    - `20250109_wf-02-enrich-contact-info_v004.json`
-   - `20250109_wf-03-upsert-crm_v002.json`
-   - `20250109_wf-04-sales-nurture-agent_v006.json`
-   - `20250109_wf-05-hot-lead-handoff_v001.json`
-   - `20250109_wf-06-post-sale-followup_v002.json`
+   - `20250109_wf-03-upsert-crm_v003.json` *(HTTP Request вместо Bitrix24)*
+   - `20250109_wf-04-sales-nurture-agent_v007.json` *(HTTP Request вместо Bitrix24)*
+   - `20250109_wf-05-hot-lead-handoff_v002.json` *(HTTP Request вместо Bitrix24)*
+   - `20250109_wf-06-post-sale-followup_v003.json` *(HTTP Request вместо Bitrix24)*
    - `google-sheets-sync.json`
 
 3. Настройте переменные окружения:
