@@ -133,7 +133,7 @@ WORK_HOURS_END | 18 | Конец рабочего дня
 5. `20250109_wf-04-sales-nurture-agent_v006.json`
 6. `20250109_wf-05-hot-lead-handoff_v001.json`
 7. `20250109_wf-06-post-sale-followup_v002.json`
-8. `GOOGLE_SHEETS_COMPLETE_SETUP.json` (синхронизация)
+8. `google-sheets-sync.json` (синхронизация с Google Sheets)
 
 ### 4.3 Запишите ID workflow
 

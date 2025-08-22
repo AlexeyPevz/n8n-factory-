@@ -73,9 +73,7 @@
 
 ### 2. Дублирование документации
 **Проблема**: 3 файла про Google Sheets с пересекающимся содержимым
-- `GOOGLE_SHEETS_SETUP_GUIDE.md`
-- `GOOGLE_SHEETS_COMPLETE_SETUP.md`
-- `GOOGLE_SHEETS_EXCLUSIONS_SETUP.md`
+- `GOOGLE_SHEETS_SETUP_GUIDE.md` (основной файл, остальные удалены)
 
 **Решение**: Объединить в один файл с разделами
 

@@ -106,7 +106,7 @@ docker-compose up -d mtproto
    ```
 
 2. Импортируйте workflow (последние версии):
-   - `20250109_wf-00-orchestrator_v007.json`
+   - `20250109_wf-00-orchestrator_v008.json`
    - `20250109_wf-01-fetch-gaming-clubs_v005.json`
    - `20250109_wf-02-enrich-contact-info_v004.json`
    - `20250109_wf-03-upsert-crm_v002.json`

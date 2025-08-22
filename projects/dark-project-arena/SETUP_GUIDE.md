@@ -99,7 +99,7 @@ MTPROTO_API_TOKEN=your-token
 
 ### 3.2 Импортируйте workflow в порядке:
 
-1. `20250109_wf-00-orchestrator_v007.json`
+1. `20250109_wf-00-orchestrator_v008.json`
 2. `20250109_wf-01-fetch-gaming-clubs_v005.json`
 3. `20250109_wf-02-enrich-contact-info_v004.json`
 4. `20250109_wf-03-upsert-crm_v002.json`
