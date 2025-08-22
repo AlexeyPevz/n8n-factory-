@@ -11,9 +11,8 @@
         "triggerTimes": {
           "item": [
             {
-              "mode": "everyX",
-              "value": 30,
-              "unit": "minutes"
+              "mode": "custom",
+              "cronExpression": "*/30 9-17 * * 1-5"
             }
           ]
         }
@@ -716,6 +715,16 @@
       }
     },
     {
+      "id": "check-working-hours-001",
+      "name": "Check Working Hours",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 100],
+      "parameters": {
+        "functionCode": "// Проверяем рабочее время\nconst now = new Date();\nconst moscowOffset = 3; // UTC+3\nconst moscowHour = (now.getUTCHours() + moscowOffset) % 24;\nconst dayOfWeek = now.getUTCDay();\n\n// Проверяем: понедельник-пятница (1-5), 9:00-18:00 по Москве\nconst isWorkingHours = dayOfWeek >= 1 && dayOfWeek <= 5 && moscowHour >= 9 && moscowHour < 18;\n\nif (!isWorkingHours) {\n  console.log(`Не рабочее время: день ${dayOfWeek}, час ${moscowHour} (МСК)`);\n  return [{ \n    json: { \n      ...($json),\n      skipReason: 'outside_working_hours',\n      shouldWait: true,\n      moscowHour: moscowHour,\n      dayOfWeek: dayOfWeek\n    } \n  }];\n}\n\nreturn [{ json: $json }];"
+      }
+    },
+    {
       "id": "generate-initial-kp-001",
       "name": "Generate Initial KP",
       "type": "n8n-nodes-base.function",
@@ -925,12 +934,15 @@
     "Prepare Initial Contact": {
       "main": [[{"node": "Check Skip Lead", "type": "main", "index": 0}]]
     },
-    "Check Skip Lead": {
-      "main": [
-        [{"node": "Generate Initial KP", "type": "main", "index": 0}],
-        [{"node": "Complete", "type": "main", "index": 0}]
-      ]
-    },
+          "Check Skip Lead": {
+        "main": [
+          [{"node": "Check Working Hours", "type": "main", "index": 0}],
+          [{"node": "Complete", "type": "main", "index": 0}]
+        ]
+      },
+      "Check Working Hours": {
+        "main": [[{"node": "Generate Initial KP", "type": "main", "index": 0}]]
+      },
     "Generate Initial KP": {
       "main": [[{"node": "Route by Channel", "type": "main", "index": 0}]]
     },
