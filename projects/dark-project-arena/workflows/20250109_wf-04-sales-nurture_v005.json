@@ -468,10 +468,9 @@
       "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
-        "operation": "push",
-        "list": "errors:sales_nurture",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:sales_nurture",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 86400
       },
@@ -510,7 +509,7 @@
     }
   ],
   "connections": {
-    "Bitrix24 Lead Status": {
+    "Bitrix24 Webhook": {
       "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
     },
     "Manual Trigger": {
@@ -551,7 +550,7 @@
       "main": [[{"node": "Generate Message", "type": "main", "index": 0}]]
     },
     "Generate Message": {
-      "main": [[{"node": "Parse Message", "type": "main", "index": 0}]]
+      "main": [[{"node": "Generate Message (Retry IF)", "type": "main", "index": 0}]]
     },
     "Generate Message (Retry IF)": {
       "main": [

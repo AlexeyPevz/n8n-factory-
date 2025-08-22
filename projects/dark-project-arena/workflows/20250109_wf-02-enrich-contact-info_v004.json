@@ -2,22 +2,22 @@
   "name": "WF-02 Enrich Contact Info",
   "nodes": [
     {
-      "id": "redis-trigger-001",
-      "name": "Redis Key Event",
-      "type": "n8n-nodes-base.redistrigger",
+      "id": "webhook-trigger-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [260, 300],
       "parameters": {
-        "triggerMode": "pattern",
-        "keyPattern": "club:*",
-        "events": [
-          "set"
-        ]
+        "httpMethod": "POST",
+        "path": "enrich-contact",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
       },
       "credentials": {
-        "redis": {
-          "id": "REDIS_INTERNAL",
-          "name": "Redis Internal"
+        "httpHeaderAuth": {
+          "id": "N8N_WEBHOOK_SECRET",
+          "name": "N8N Webhook Secret"
         }
       }
     },
@@ -353,10 +353,9 @@
       "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
-        "operation": "push",
-        "list": "errors:enrichment",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:enrichment",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 86400
       },
@@ -369,7 +368,7 @@
     }
   ],
   "connections": {
-    "Redis Key Event": {
+    "Webhook Trigger": {
       "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
     },
     "Execute Workflow Trigger": {

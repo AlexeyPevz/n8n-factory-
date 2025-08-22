@@ -1,0 +1,994 @@
+{
+  "name": "WF-04 Sales Nurture with AI Agent",
+  "nodes": [
+    {
+      "id": "bitrix24-new-leads-trigger-001",
+      "name": "Bitrix24 New Leads Schedule",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [260, 200],
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "custom",
+              "cronExpression": "*/30 9-17 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "mtproto-message-trigger-001",
+      "name": "MTProto Message Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mtproto-incoming",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MTPROTO_WEBHOOK_SECRET",
+          "name": "MTProto Webhook Secret"
+        }
+      }
+    },
+    {
+      "id": "bitrix24-webhook-001",
+      "name": "Bitrix24 Lead Update",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bitrix24-lead-nurture",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BITRIX24_WEBHOOK_SECRET",
+          "name": "Bitrix24 Webhook Secret"
+        }
+      }
+    },
+    {
+      "id": "manual-trigger-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "parameters": {
+        "mode": "chooseBranch",
+        "options": {}
+      }
+    },
+    {
+      "id": "identify-source-001",
+      "name": "Identify Message Source",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 400],
+      "parameters": {
+        "functionCode": "// Определяем источник и контекст\nlet messageData = {};\n\n// Telegram сообщение\nif ($json.message) {\n  const msg = $json.message;\n  messageData = {\n    source: 'telegram',\n    chatId: msg.chat.id,\n    userId: msg.from.id,\n    userName: msg.from.first_name || 'Клиент',\n    text: msg.text || '',\n    messageId: msg.message_id,\n    isReply: true\n  };\n}\n// Bitrix24 webhook (новый лид или обновление)\nelse if ($json.leadId || $json.LEAD_ID) {\n  messageData = {\n    source: 'bitrix24',\n    leadId: $json.leadId || $json.LEAD_ID,\n    status: $json.STATUS_ID || 'NEW',\n    phone: $json.PHONE || '',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n// Manual trigger для тестирования\nelse {\n  messageData = {\n    source: 'manual',\n    leadId: $json.leadId || '12345',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n\nconsole.log('Message source identified:', messageData.source);\n\nreturn [{ json: messageData }];"
+      }
+    },
+    {
+      "id": "get-lead-context-001",
+      "name": "Get Lead Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 400],
+      "parameters": {
+        "functionCode": "const messageData = $json;\nlet leadContext = {};\n\n// Если это ответ от клиента, найдем лид по телефону/telegram\nif (messageData.isReply && messageData.source === 'telegram') {\n  // Здесь должен быть поиск в CRM по telegram userId\n  // Для примера используем заглушку\n  leadContext = {\n    needsSearch: true,\n    searchBy: 'telegram',\n    searchValue: messageData.userId\n  };\n} \n// Если это инициация контакта из CRM\nelse if (messageData.leadId) {\n  leadContext = {\n    needsLoad: true,\n    leadId: messageData.leadId\n  };\n}\n\nreturn [{ \n  json: {\n    ...messageData,\n    leadContext\n  } \n}];"
+      }
+    },
+    {
+      "id": "load-lead-from-crm-001",
+      "name": "Load Lead from CRM",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1060, 300],
+      "parameters": {
+        "resource": "lead",
+        "operation": "get",
+        "leadId": "={{ $json.leadId || $json.leadContext.leadId }}"
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "search-lead-by-telegram-001",
+      "name": "Search Lead by Telegram",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [1060, 500],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "filters": {
+          "filter": {
+            "UF_CRM_TELEGRAM_ID": "={{ $json.userId }}"
+          }
+        },
+        "options": {
+          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "UF_CRM_TELEGRAM", "UF_CRM_DIALOG_HISTORY"],
+          "limit": 1
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "router-lead-search-001",
+      "name": "Route Lead Search",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1060, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needsLoad",
+              "leftValue": "={{ $json.leadContext.needsLoad }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-lead-data-001",
+      "name": "Merge Lead Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1260, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "prepare-agent-context-001",
+      "name": "Prepare Agent Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 400],
+      "parameters": {
+        "functionCode": "// Подготавливаем контекст для AI Agent\nconst messageData = $node['Identify Message Source'].json;\nconst leadData = $json;\n\n// Парсим историю диалога\nlet dialogHistory = [];\ntry {\n  if (leadData.UF_CRM_DIALOG_HISTORY) {\n    dialogHistory = JSON.parse(leadData.UF_CRM_DIALOG_HISTORY);\n  }\n} catch (e) {\n  dialogHistory = [];\n}\n\n// Формируем контекст для агента\nconst agentContext = {\n  // Данные лида\n  leadId: leadData.ID || leadData.id,\n  clubName: leadData.TITLE || 'Неизвестный клуб',\n  city: leadData.ADDRESS_CITY || '',\n  phone: leadData.PHONE || '',\n  telegram: leadData.UF_CRM_TELEGRAM || '',\n  status: leadData.STATUS_ID || 'NEW',\n  \n  // Дополнительные данные\n  isChain: leadData.UF_CRM_IS_CHAIN === 'Y',\n  branchCount: parseInt(leadData.UF_CRM_BRANCH_COUNT) || 1,\n  estimatedPCs: parseInt(leadData.UF_CRM_ESTIMATED_PCS) || 20,\n  priority: leadData.UF_CRM_PRIORITY || 'medium',\n  \n  // История общения\n  dialogHistory: dialogHistory,\n  contactCount: dialogHistory.length,\n  lastContactDate: dialogHistory.length > 0 ? dialogHistory[dialogHistory.length - 1].date : null,\n  \n  // Текущее сообщение\n  currentMessage: messageData.text || '',\n  isIncoming: messageData.isReply,\n  messageSource: messageData.source,\n  \n  // Флаги для агента\n  needsInitialContact: messageData.needsInitialContact || false,\n  shouldClassifyIntent: messageData.isReply\n};\n\nconsole.log(`Agent context prepared for ${agentContext.clubName}`);\n\nreturn [{ json: agentContext }];"
+      }
+    },
+    {
+      "id": "qdrant-vector-store-001",
+      "name": "Qdrant Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [1660, 300],
+      "parameters": {
+        "qdrantCollection": "dark_project_kb"
+      },
+      "credentials": {
+        "qdrantApi": {
+          "id": "QDRANT_API",
+          "name": "Qdrant API"
+        }
+      }
+    },
+    {
+      "id": "vector-store-tool-001",
+      "name": "KB Search Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1,
+      "position": [1860, 300],
+      "parameters": {
+        "name": "search_knowledge_base",
+        "description": "Поиск информации о продукции Dark Project, ценах, условиях сотрудничества, технических характеристиках"
+      }
+    },
+    {
+      "id": "crm-update-tool-001",
+      "name": "CRM Update Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 400],
+      "parameters": {
+        "name": "update_crm",
+        "description": "Обновить информацию в CRM: статус лида, комментарии, историю диалога",
+        "workflowId": "={{ $env.WF_03_WORKFLOW_ID }}",
+        "fields": {
+          "values": [
+            {
+              "name": "leadId",
+              "type": "string",
+              "description": "ID лида в CRM"
+            },
+            {
+              "name": "action",
+              "type": "string", 
+              "description": "Действие: update_status, add_comment, update_dialog_history"
+            },
+            {
+              "name": "data",
+              "type": "json",
+              "description": "Данные для обновления"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "calculator-tool-001",
+      "name": "Discount Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [1860, 500],
+      "parameters": {
+        "name": "calculate_discount",
+        "description": "Калькулятор для расчета скидок и итоговых сумм заказа"
+      }
+    },
+    {
+      "id": "conversation-memory-001",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [1860, 600],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.leadId }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "openai-chat-model-001",
+      "name": "GPT-4 Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1860, 700],
+      "parameters": {
+        "model": "gpt-4",
+        "temperature": 0.7,
+        "maxTokens": 500
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "fallback-chat-model-001",
+      "name": "GPT-3.5 Fallback Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1860, 800],
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "maxTokens": 500
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "sales-agent-001",
+      "name": "Sales Agent РОП 20Y",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [2060, 400],
+      "parameters": {
+        "prompt": "=== СИСТЕМНЫЙ ПРОМПТ ===\n\nТы — Александр, руководитель отдела продаж (РОП) компании Dark Project Arena с 20-летним опытом в индустрии компьютерной периферии. Тебе 42 года, ты лично знаешь владельцев многих крупных киберспортивных клубов.\n\n=== ТВОЯ ЛИЧНОСТЬ ===\n- Общаешься дружелюбно, на «ты», но профессионально\n- Используешь эмодзи, но в меру (1-2 на сообщение)\n- Пишешь короткие, емкие сообщения (до 400 символов)\n- Всегда конкретен и говоришь о выгодах клиента\n- Знаешь боли клубов: поломки оборудования, жалобы геймеров, высокие затраты\n\n=== МЕТОДОЛОГИЯ ПРОДАЖ ===\nИспользуешь SPIN-selling:\n1. Situation - выясни текущую ситуацию\n2. Problem - найди проблемы клиента\n3. Implication - покажи последствия проблем\n4. Need-payoff - предложи решение\n\n=== ТВОЯ ЗАДАЧА ===\n1. ПЕРВЫЙ ОТВЕТ после мягкого подхода:\n   - Если просят другой контакт → \"Конечно! На какой номер/телеграм удобнее написать?\"\n   - Если интерес есть → переходи к выявлению потребностей\n   - Если \"не интересно\" → уточни причину (дорого? есть поставщик? не актуально?)\n   - Если игнор → подожди 2-3 дня и напиши follow-up\n\n2. РАЗВИТИЕ ДИАЛОГА:\n   - Используй SPIN-selling для выявления болей\n   - НЕ давай сразу все цены - сначала пойми потребность\n   - Предлагай сначала протестировать 2-3 единицы\n\n3. КЛАССИФИКАЦИЯ намерений:\n   - \"смена_контакта\" → запроси новый контакт\n   - \"интерес_есть\" → выявляй потребности\n   - \"интерес_к_цене\" → дай цены с обоснованием выгоды\n   - \"хочет_тест\" → предложи 2-3 мышки на тест\n   - \"готов_встретиться\" → назначь встречу\n   - \"есть_поставщик\" → узнай кто и предложи сравнить условия\n   - \"дорого\" → покажи расчет экономии\n   - \"не_актуально\" → уточни когда планируют обновление\n   - \"отказ\" → вежливо попрощайся и предложи связаться позже\n\n=== КОНТЕКСТ ТЕКУЩЕГО ДИАЛОГА ===\nКлуб: {{clubName}}\nГород: {{city}}\nКоличество ПК: {{estimatedPCs}}\nСеть: {{isChain ? 'Да' : 'Нет'}}\nИстория диалога: {{dialogHistory.length}} сообщений\n\nТекущее сообщение клиента: {{currentMessage}}\n\n=== ВАЖНО ===\n- ВСЕГДА используй инструменты для поиска актуальной информации\n- ОБЯЗАТЕЛЬНО обновляй CRM после каждого ответа\n- При готовности к покупке СРАЗУ меняй статус на \"Горячий\"\n- НЕ придумывай цены и условия - бери из базы знаний",
+        "hasOutputParser": true,
+        "maxIterations": 10
+      }
+    },
+    {
+      "id": "parse-agent-response-001",
+      "name": "Parse Agent Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2260, 400],
+      "parameters": {
+        "functionCode": "// Парсим ответ агента\nconst agentResponse = $json;\nconst context = $node['Prepare Agent Context'].json;\n\n// Извлекаем текст ответа и классификацию\nlet responseText = '';\nlet intent = 'unknown';\nlet shouldUpdateStatus = false;\nlet newStatus = context.status;\n\n// Парсим output агента\nif (typeof agentResponse === 'string') {\n  responseText = agentResponse;\n} else if (agentResponse.output) {\n  responseText = agentResponse.output;\n} else if (agentResponse.text) {\n  responseText = agentResponse.text;\n}\n\n// Определяем intent по ключевым словам в ответе агента и сообщении клиента\nconst lowerResponse = responseText.toLowerCase();\nconst currentMessage = context.currentMessage?.toLowerCase() || '';\n\n// Проверяем запрос на смену контакта\nif (currentMessage.match(/напиш[и|ите]?\\s+на|лучше\\s+на|мой\\s+(телеграм|email|почт|номер|whatsapp|ватсап)/)) {\n  intent = 'смена_контакта';\n} \n// Проверяем интерес\nelse if (currentMessage.includes('интересно') || currentMessage.includes('расскажи') || currentMessage.includes('давай')) {\n  intent = 'интерес_есть';\n  if (context.status === 'NEW') {\n    newStatus = 'IN_PROGRESS';\n    shouldUpdateStatus = true;\n  }\n} \n// Встреча\nelse if (lowerResponse.includes('встреч') || lowerResponse.includes('созвон')) {\n  intent = 'готов_встретиться';\n  newStatus = 'HOT';\n  shouldUpdateStatus = true;\n} \n// Цены\nelse if (lowerResponse.includes('цен') || lowerResponse.includes('стоимост') || lowerResponse.includes('скидк')) {\n  intent = 'интерес_к_цене';\n  if (context.status === 'NEW') {\n    newStatus = 'IN_PROGRESS';\n    shouldUpdateStatus = true;\n  }\n} \n// Тест\nelse if (lowerResponse.includes('тест') || lowerResponse.includes('попробова')) {\n  intent = 'хочет_тест';\n  newStatus = 'IN_PROGRESS';\n  shouldUpdateStatus = true;\n} \n// Отказ\nelse if (currentMessage.includes('не интересно') || currentMessage.includes('не надо') || currentMessage.includes('спасибо, нет')) {\n  intent = 'отказ';\n  newStatus = 'JUNK';\n  shouldUpdateStatus = true;\n} \n// Есть поставщик\nelse if (currentMessage.includes('уже есть') || currentMessage.includes('работаем с') || currentMessage.includes('поставщик')) {\n  intent = 'есть_поставщик';\n}\n// Дорого\nelse if (currentMessage.includes('дорого') || currentMessage.includes('дешевле') || currentMessage.includes('бюджет')) {\n  intent = 'дорого';\n}\n// Не актуально\nelse if (currentMessage.includes('не актуально') || currentMessage.includes('пока не') || currentMessage.includes('может позже')) {\n  intent = 'не_актуально';\n}\n\n// Обновляем историю диалога\nconst newDialogEntry = {\n  date: new Date().toISOString(),\n  from: context.isIncoming ? 'client' : 'rop',\n  message: context.isIncoming ? context.currentMessage : responseText,\n  intent: intent\n};\n\nconst updatedHistory = [...context.dialogHistory, newDialogEntry];\n\nreturn [{\n  json: {\n    context: context,\n    agentResponse: responseText,\n    intent: intent,\n    shouldUpdateStatus: shouldUpdateStatus,\n    newStatus: newStatus,\n    updatedHistory: updatedHistory,\n    shouldSendMessage: !context.isIncoming || responseText.length > 0\n  }\n}];"
+      }
+    },
+    {
+      "id": "update-crm-dialog-001",
+      "name": "Update CRM Dialog History",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [2460, 300],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.context.leadId }}",
+        "updateFields": {
+          "UF_CRM_DIALOG_HISTORY": "={{ JSON.stringify($json.updatedHistory) }}",
+          "UF_CRM_LAST_CONTACT": "={{ new Date().toISOString() }}",
+          "UF_CRM_CONTACT_COUNT": "={{ $json.updatedHistory.length }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "update-lead-status-001",
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [2460, 500],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.context.leadId }}",
+        "updateFields": {
+          "STATUS_ID": "={{ $json.newStatus }}",
+          "COMMENTS": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Intent: ' + $json.intent + '\\nAgent: ' + $json.agentResponse.substring(0, 200) + '...' }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "route-update-status-001",
+      "name": "Should Update Status?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2460, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "shouldUpdate",
+              "leftValue": "={{ $json.shouldUpdateStatus }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-crm-updates-001",
+      "name": "Merge CRM Updates",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2660, 400],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      }
+    },
+    {
+      "id": "route-send-message-001",
+      "name": "Should Send Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2860, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "shouldSend",
+              "leftValue": "={{ $node['Parse Agent Response'].json.shouldSendMessage }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "route-channel-001",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [3060, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $node['Parse Agent Response'].json.context.preferredChannel || 'telegram' }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "telegram",
+              "output": 0
+            },
+            {
+              "value2": "whatsapp",
+              "output": 1
+            },
+            {
+              "value2": "email",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      }
+    },
+    {
+      "id": "send-telegram-mtproto-001",
+      "name": "Send via MTProto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3260, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MTPROTO_API_URL }}/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParametersJson": "={{ { \"chat_id\": $node['Parse Agent Response'].json.context.telegram || $node['Identify Message Source'].json.chatId, \"message\": $node['Parse Agent Response'].json.agentResponse, \"parse_mode\": \"Markdown\" } }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "MTPROTO_API_AUTH",
+          "name": "MTProto API Auth"
+        }
+      }
+    },
+    {
+      "id": "send-whatsapp-001",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3260, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.whatsapp.com/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppBusinessApi",
+        "sendBody": true,
+        "bodyParametersJson": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $node['Parse Agent Response'].json.context.phone || $node['Parse Agent Response'].json.context.whatsapp, \"type\": \"text\", \"text\": { \"body\": $node['Parse Agent Response'].json.agentResponse } } }}",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "WHATSAPP_BUSINESS_API",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "id": "send-email-001",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [3260, 400],
+      "parameters": {
+        "fromEmail": "alexander@darkproject.ru",
+        "toEmail": "={{ $node['Parse Agent Response'].json.context.email }}",
+        "subject": "Dark Project Arena - Специальное предложение для {{ $node['Parse Agent Response'].json.context.clubName }}",
+        "text": "={{ $node['Parse Agent Response'].json.agentResponse }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "id": "SMTP_CREDENTIALS",
+          "name": "SMTP Email"
+        }
+      }
+    },
+    {
+      "id": "check-hot-lead-001",
+      "name": "Check if Hot Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3260, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "isHot",
+              "leftValue": "={{ $node['Parse Agent Response'].json.newStatus }}",
+              "rightValue": "HOT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "trigger-hot-lead-handoff-001",
+      "name": "Trigger Hot Lead Handoff",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [3460, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.WF_05_WORKFLOW_ID }}",
+        "waitForSubWorkflow": false
+      }
+    },
+    {
+      "id": "complete-001",
+      "name": "Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [3460, 500],
+      "parameters": {}
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 700],
+      "parameters": {}
+    },
+    {
+      "id": "handle-error-001",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 700],
+      "parameters": {
+        "functionCode": "const error = {\n  workflow: 'WF-04 Sales Nurture Agent',\n  timestamp: new Date().toISOString(),\n  error: $json.error?.message || 'Unknown error',\n  node: $json.error?.node?.name || 'Unknown',\n  context: $node['Prepare Agent Context']?.json || {}\n};\n\nconsole.error('WF-04 Agent Error:', error);\n\nreturn [{ json: error }];"
+      }
+    },
+    {
+      "id": "save-error-001",
+      "name": "Save Error",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [660, 700],
+      "parameters": {
+        "operation": "lpush",
+        "key": "errors:sales_nurture_agent",
+        "value": "={{ JSON.stringify($json) }}",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      }
+    },
+    {
+      "id": "get-new-leads-001",
+      "name": "Get New Leads from CRM",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [460, 200],
+      "parameters": {
+        "resource": "lead",
+        "operation": "getAll",
+        "filters": {
+          "filter": {
+            "STATUS_ID": "NEW",
+            "UF_CRM_CONTACT_COUNT": 0
+          }
+        },
+        "options": {
+          "select": ["ID", "TITLE", "PHONE", "EMAIL", "UF_CRM_TELEGRAM", "ADDRESS_CITY", "UF_CRM_IS_CHAIN", "UF_CRM_ESTIMATED_PCS"],
+          "limit": 10
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "split-new-leads-001",
+      "name": "Split New Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 200],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "rate-limit-001",
+      "name": "Rate Limit Protection",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [760, 200],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "prepare-initial-contact-001",
+      "name": "Prepare Initial Contact",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [860, 200],
+      "parameters": {
+        "functionCode": "// Подготавливаем данные для первого контакта\nconst lead = $json;\n\n// Определяем лучший канал связи\nlet preferredChannel = 'none';\nlet contactValue = '';\n\nif (lead.UF_CRM_TELEGRAM) {\n  preferredChannel = 'telegram';\n  contactValue = lead.UF_CRM_TELEGRAM;\n} else if (lead.UF_CRM_WHATSAPP || (lead.PHONE && lead.PHONE.length > 0)) {\n  preferredChannel = 'whatsapp';\n  contactValue = lead.UF_CRM_WHATSAPP || lead.PHONE[0].VALUE || lead.PHONE;\n} else if (lead.EMAIL && lead.EMAIL.length > 0) {\n  preferredChannel = 'email';\n  contactValue = lead.EMAIL[0].VALUE || lead.EMAIL;\n}\n\n// Подготавливаем контекст для первого сообщения\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Уважаемый клиент',\n  city: lead.ADDRESS_CITY || '',\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 20,\n  preferredChannel: preferredChannel,\n  contactValue: contactValue,\n  isInitialContact: true,\n  needsKP: true,\n  dialogHistory: [],\n  contactCount: 0\n};\n\nif (preferredChannel === 'none') {\n  console.log(`No contact info for lead ${lead.ID}`);\n  return [{ json: { skip: true, leadId: lead.ID, reason: 'No contact info' } }];\n}\n\nreturn [{ json: context }];"
+      }
+    },
+    {
+      "id": "check-skip-lead-001",
+      "name": "Check Skip Lead",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1060, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "shouldSkip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "check-working-hours-001",
+      "name": "Check Working Hours",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 100],
+      "parameters": {
+        "functionCode": "// Проверяем рабочее время\nconst now = new Date();\nconst moscowOffset = 3; // UTC+3\nconst moscowHour = (now.getUTCHours() + moscowOffset) % 24;\nconst dayOfWeek = now.getUTCDay();\n\n// Проверяем: понедельник-пятница (1-5), 9:00-18:00 по Москве\nconst isWorkingHours = dayOfWeek >= 1 && dayOfWeek <= 5 && moscowHour >= 9 && moscowHour < 18;\n\nif (!isWorkingHours) {\n  console.log(`Не рабочее время: день ${dayOfWeek}, час ${moscowHour} (МСК)`);\n  return [{ \n    json: { \n      ...($json),\n      skipReason: 'outside_working_hours',\n      shouldWait: true,\n      moscowHour: moscowHour,\n      dayOfWeek: dayOfWeek\n    } \n  }];\n}\n\nreturn [{ json: $json }];"
+      }
+    },
+    {
+      "id": "generate-initial-kp-001",
+      "name": "Generate Initial KP",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 100],
+      "parameters": {
+        "functionCode": "// Генерируем персонализированное КП\nconst context = $json;\n\n// Определяем тип первого сообщения на основе данных лида\nlet messageType = context.initialMessageType || 'soft'; // soft, direct, problem\n\n// Автоматический выбор стратегии\nif (context.source === 'website' || context.temperature === 'hot') {\n  messageType = 'direct'; // Прямое КП для горячих лидов\n} else if (context.contactCount > 0) {\n  messageType = 'problem'; // Проблемный подход для повторных контактов\n} else {\n  messageType = 'soft'; // Мягкий подход для холодных лидов\n}\n\nlet message = '';\n\nif (messageType === 'soft') {\n  // Мягкий подход - представление и вопрос\n  message = `Привет! 👋\\n\\n`;\n  message += `Меня зовут Александр, я из компании Dark Project Arena.\\n`;\n  message += `Мы специализируемся на игровой периферии для компьютерных клубов.\\n\\n`;\n  \n  if (context.isChain) {\n    message += `Заметил вашу сеть \"${context.clubName}\" - `;\n    message += `работаем с крупными сетями по всей России.\\n\\n`;\n  } else {\n    message += `Увидел ваш клуб \"${context.clubName}\"${context.city ? ` в ${context.city}` : ''}.\\n\\n`;\n  }\n  \n  message += `У нас есть интересные решения для клубов:\\n`;\n  message += `• Профессиональная периферия\\n`;\n  message += `• Специальные цены для B2B\\n`;\n  message += `• Гарантия с заменой за 24ч\\n\\n`;\n  \n  message += `Актуально ли для вас обновление оборудования?\\n`;\n  message += `Или может быть удобнее пообщаться по другому контакту?`;\n  \n} else if (messageType === 'problem') {\n  // Проблемно-ориентированный подход\n  message = `Добрый день! 👋\\n\\n`;\n  message += `Александр, Dark Project Arena.\\n`;\n  message += `Работаем с ${context.city ? `клубами ${context.city}` : 'компьютерными клубами'}.\\n\\n`;\n  \n  message += `Многие владельцы жалуются на:\\n`;\n  message += `❌ Быстрый износ мышек (3-4 месяца)\\n`;\n  message += `❌ Постоянные жалобы геймеров\\n`;\n  message += `❌ Высокие затраты на замену\\n\\n`;\n  \n  message += `Сталкиваетесь с подобным в \"${context.clubName}\"?\\n\\n`;\n  message += `У нас есть решение с гарантией 2 года.`;\n  \n} else {\n  // Прямое КП\n  message = `Добрый день! 🎮\\n\\n`;\n  message += `Специальное предложение для \"${context.clubName}\":\\n\\n`;\n  message += `✅ Игровые мыши Dark Project - от 2500₽\\n`;\n  message += `✅ Механические клавиатуры - от 3500₽\\n`;\n  message += `✅ Гарантия 2 года (замена за 24ч)\\n`;\n  message += `✅ Скидка 20% от ${context.estimatedPCs >= 50 ? '50' : '30'} единиц\\n\\n`;\n  \n  if (context.estimatedPCs > 30) {\n    message += `При парке в ${context.estimatedPCs} ПК = экономия 150 000₽/год\\n\\n`;\n  }\n  \n  message += `Интересно? Могу прислать расчет.\\n\\n`;\n  message += `Александр, Dark Project Arena`;\n}\n\nreturn [{\n  json: {\n    ...context,\n    initialMessage: message,\n    messageType: 'initial_kp'\n  }\n}];"
+      }
+    },
+    {
+      "id": "detect-contact-change-001", 
+      "name": "Detect Contact Change Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2060, 200],
+      "parameters": {
+        "functionCode": "// Проверяем, просит ли клиент написать на другой контакт\nconst agentResponse = $json;\nconst context = $node['Prepare Agent Context'].json;\nconst currentMessage = context.currentMessage || '';\n\n// Паттерны для определения запроса смены контакта\nconst patterns = [\n  /напиш[и|ите]?\\s+на\\s+(\\+?[0-9\\s\\-\\(\\)]+)/i,\n  /лучше\\s+на\\s+(\\+?[0-9\\s\\-\\(\\)]+)/i,\n  /мой\\s+телеграм\\s*[@]?([a-zA-Z0-9_]+)/i,\n  /пиши\\s+в\\s+телеграм\\s*[@]?([a-zA-Z0-9_]+)/i,\n  /на\\s+почту\\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/i,\n  /мой\\s+email\\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})/i\n];\n\nlet newContactInfo = null;\nlet newContactType = null;\nlet newContactValue = null;\n\nfor (const pattern of patterns) {\n  const match = currentMessage.match(pattern);\n  if (match) {\n    newContactValue = match[1];\n    if (pattern.toString().includes('телеграм')) {\n      newContactType = 'telegram';\n      newContactValue = newContactValue.startsWith('@') ? newContactValue : '@' + newContactValue;\n    } else if (pattern.toString().includes('email') || pattern.toString().includes('почту')) {\n      newContactType = 'email';\n    } else {\n      newContactType = 'phone';\n      newContactValue = newContactValue.replace(/[^0-9+]/g, '');\n    }\n    break;\n  }\n}\n\nif (newContactType) {\n  newContactInfo = {\n    detected: true,\n    type: newContactType,\n    value: newContactValue,\n    leadId: context.leadId\n  };\n}\n\nreturn [{\n  json: {\n    ...agentResponse,\n    newContactInfo: newContactInfo\n  }\n}];"
+      }
+    },
+    {
+      "id": "route-contact-update-001",
+      "name": "Route Contact Update", 
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2260, 200],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasNewContact",
+              "leftValue": "={{ $json.newContactInfo?.detected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "update-contact-in-crm-001",
+      "name": "Update Contact in CRM",
+      "type": "n8n-nodes-base.bitrix24",
+      "typeVersion": 1,
+      "position": [2460, 100],
+      "parameters": {
+        "resource": "lead",
+        "operation": "update",
+        "leadId": "={{ $json.newContactInfo.leadId }}",
+        "updateFields": {
+          "fields": "={{ $json.newContactInfo.type === 'telegram' ? { UF_CRM_TELEGRAM: $json.newContactInfo.value, UF_CRM_PREFERRED_CHANNEL: 'telegram' } : $json.newContactInfo.type === 'email' ? { EMAIL: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'email' } : { PHONE: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'phone' } }}",
+          "COMMENTS": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Клиент предоставил новый контакт: ' + $json.newContactInfo.type + ' - ' + $json.newContactInfo.value }}"
+        }
+      },
+      "credentials": {
+        "bitrix24Api": {
+          "id": "BITRIX24_CRM",
+          "name": "Bitrix24 CRM"
+        }
+      }
+    },
+    {
+      "id": "send-to-new-contact-001",
+      "name": "Send to New Contact",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2660, 100],
+      "parameters": {
+        "functionCode": "// Подготавливаем отправку на новый контакт\nconst data = $json;\nconst newContact = data.newContactInfo;\n\n// Формируем сообщение для нового канала\nlet confirmMessage = `Спасибо! Продублирую информацию на ${newContact.value} 👍`;\nlet redirectMessage = data.agentResponse; // Используем ответ агента\n\nreturn [{\n  json: {\n    ...data,\n    confirmMessage: confirmMessage,\n    redirectMessage: redirectMessage,\n    shouldSendToNewContact: true,\n    newChannel: newContact.type,\n    newContactValue: newContact.value\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+          "MTProto Message Trigger": {
+        "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+      },
+    "Bitrix24 Lead Update": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Manual Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 2}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Identify Message Source", "type": "main", "index": 0}]]
+    },
+    "Identify Message Source": {
+      "main": [[{"node": "Get Lead Context", "type": "main", "index": 0}]]
+    },
+    "Get Lead Context": {
+      "main": [[{"node": "Route Lead Search", "type": "main", "index": 0}]]
+    },
+    "Route Lead Search": {
+      "main": [
+        [{"node": "Load Lead from CRM", "type": "main", "index": 0}],
+        [{"node": "Search Lead by Telegram", "type": "main", "index": 0}]
+      ]
+    },
+    "Load Lead from CRM": {
+      "main": [[{"node": "Merge Lead Data", "type": "main", "index": 0}]]
+    },
+    "Search Lead by Telegram": {
+      "main": [[{"node": "Merge Lead Data", "type": "main", "index": 1}]]
+    },
+    "Merge Lead Data": {
+      "main": [[{"node": "Prepare Agent Context", "type": "main", "index": 0}]]
+    },
+    "Prepare Agent Context": {
+      "main": [[{"node": "Sales Agent РОП 20Y", "type": "main", "index": 0}]]
+    },
+    "Qdrant Knowledge Base": {
+      "ai_vectorStore": [[{"node": "KB Search Tool", "type": "ai_vectorStore", "index": 0}]]
+    },
+    "KB Search Tool": {
+      "ai_tool": [[{"node": "Sales Agent РОП 20Y", "type": "ai_tool", "index": 0}]]
+    },
+    "CRM Update Tool": {
+      "ai_tool": [[{"node": "Sales Agent РОП 20Y", "type": "ai_tool", "index": 1}]]
+    },
+    "Discount Calculator": {
+      "ai_tool": [[{"node": "Sales Agent РОП 20Y", "type": "ai_tool", "index": 2}]]
+    },
+    "Conversation Memory": {
+      "ai_memory": [[{"node": "Sales Agent РОП 20Y", "type": "ai_memory", "index": 0}]]
+    },
+          "GPT-4 Chat Model": {
+        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
+      },
+      "GPT-3.5 Fallback Model": {
+        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
+      },
+    "Sales Agent РОП 20Y": {
+      "main": [[{"node": "Parse Agent Response", "type": "main", "index": 0}]]
+    },
+    "Parse Agent Response": {
+      "main": [[{"node": "Detect Contact Change Request", "type": "main", "index": 0}]]
+    },
+    "Update CRM Dialog History": {
+      "main": [[{"node": "Should Update Status?", "type": "main", "index": 0}]]
+    },
+    "Should Update Status?": {
+      "main": [
+        [{"node": "Update Lead Status", "type": "main", "index": 0}],
+        [{"node": "Merge CRM Updates", "type": "main", "index": 1}]
+      ]
+    },
+    "Update Lead Status": {
+      "main": [[{"node": "Merge CRM Updates", "type": "main", "index": 0}]]
+    },
+    "Merge CRM Updates": {
+      "main": [[{"node": "Should Send Message?", "type": "main", "index": 0}]]
+    },
+          "Should Send Message?": {
+        "main": [
+          [{"node": "Route by Channel", "type": "main", "index": 0}],
+          [{"node": "Complete", "type": "main", "index": 0}]
+        ]
+      },
+      "Route by Channel": {
+        "main": [
+          [{"node": "Send via MTProto", "type": "main", "index": 0}],
+          [{"node": "Send WhatsApp", "type": "main", "index": 0}],
+          [{"node": "Send Email", "type": "main", "index": 0}]
+        ]
+      },
+      "Send via MTProto": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
+      "Send WhatsApp": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
+      "Send Email": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
+    "Check if Hot Lead": {
+      "main": [
+        [{"node": "Trigger Hot Lead Handoff", "type": "main", "index": 0}],
+        [{"node": "Complete", "type": "main", "index": 0}]
+      ]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
+    },
+    "Handle Error": {
+      "main": [[{"node": "Save Error", "type": "main", "index": 0}]]
+    },
+    "Bitrix24 New Leads Schedule": {
+      "main": [[{"node": "Get New Leads from CRM", "type": "main", "index": 0}]]
+    },
+    "Get New Leads from CRM": {
+      "main": [[{"node": "Split New Leads", "type": "main", "index": 0}]]
+    },
+    "Split New Leads": {
+      "main": [[{"node": "Rate Limit Protection", "type": "main", "index": 0}]]
+    },
+    "Rate Limit Protection": {
+      "main": [[{"node": "Prepare Initial Contact", "type": "main", "index": 0}]]
+    },
+    "Prepare Initial Contact": {
+      "main": [[{"node": "Check Skip Lead", "type": "main", "index": 0}]]
+    },
+          "Check Skip Lead": {
+        "main": [
+          [{"node": "Check Working Hours", "type": "main", "index": 0}],
+          [{"node": "Complete", "type": "main", "index": 0}]
+        ]
+      },
+      "Check Working Hours": {
+        "main": [[{"node": "Generate Initial KP", "type": "main", "index": 0}]]
+      },
+    "Generate Initial KP": {
+      "main": [[{"node": "Route by Channel", "type": "main", "index": 0}]]
+    },
+    "Detect Contact Change Request": {
+      "main": [[{"node": "Route Contact Update", "type": "main", "index": 0}]]
+    },
+    "Route Contact Update": {
+      "main": [
+        [{"node": "Update Contact in CRM", "type": "main", "index": 0}],
+        [{"node": "Update CRM Dialog History", "type": "main", "index": 0}]
+      ]
+    },
+    "Update Contact in CRM": {
+      "main": [[{"node": "Send to New Contact", "type": "main", "index": 0}]]
+    },
+    "Send to New Contact": {
+      "main": [[{"node": "Update CRM Dialog History", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 180,
+    "timezone": "Europe/Moscow"
+  },
+  "version": 2,
+  "id": "wf-04-sales-nurture-agent",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "AI Agent-based sales nurturing with full dialog management, intent classification, and CRM integration",
+    "version": "2.0.0"
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "6",
+      "name": "ai-agent"
+    },
+    {
+      "id": "7",
+      "name": "sales"
+    }
+  ]
+}

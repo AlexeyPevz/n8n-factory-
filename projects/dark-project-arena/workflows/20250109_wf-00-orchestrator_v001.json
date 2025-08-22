@@ -71,7 +71,6 @@
       "parameters": { "batchSize": 1 }
     },
     {
-    {
       "id": "wait-rate-limit-001",
       "name": "Rate Limit Delay",
       "type": "n8n-nodes-base.wait",

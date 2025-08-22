@@ -278,10 +278,9 @@
       "typeVersion": 1,
       "position": [660, 700],
       "parameters": {
-        "operation": "push",
-        "list": "errors:followup",
-        "messageData": "={{ JSON.stringify($json) }}",
-        "pushType": "lpush",
+        "operation": "lpush",
+        "key": "errors:followup",
+        "value": "={{ JSON.stringify($json) }}",
         "expire": true,
         "ttl": 86400
       },

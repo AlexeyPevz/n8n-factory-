@@ -285,7 +285,7 @@
     }
   ],
   "connections": {
-    "Bitrix24 Lead Status Change": {
+    "Bitrix24 Webhook": {
       "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
     },
     "Manual Trigger": {
