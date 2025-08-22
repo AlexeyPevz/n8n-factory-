@@ -407,13 +407,5 @@
     "executionTimeout": 3600,
     "timezone": "Europe/Moscow"
   },
-  "triggers": {
-    "schedule": [
-      {
-        "type": "cron",
-        "expression": "0 2 * * *"
-      }
-    ]
-  },
   "versionId": "b8c0d0f1-0a2e-4c3f-9e8d-7a6b5c4d3e2f"
 }

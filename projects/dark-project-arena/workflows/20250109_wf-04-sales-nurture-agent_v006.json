@@ -858,12 +858,12 @@
     "Conversation Memory": {
       "ai_memory": [[{"node": "Sales Agent РОП 20Y", "type": "ai_memory", "index": 0}]]
     },
-          "GPT-4 Chat Model": {
-        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
-      },
-      "GPT-3.5 Fallback Model": {
-        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
-      },
+    "GPT-4 Chat Model": {
+      "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
+    },
+    "GPT-3.5 Fallback Model": {
+      "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
+    },
     "Sales Agent РОП 20Y": {
       "main": [[{"node": "Parse Agent Response", "type": "main", "index": 0}]]
     },
