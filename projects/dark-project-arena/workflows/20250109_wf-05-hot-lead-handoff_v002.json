@@ -72,19 +72,38 @@
     {
       "id": "get-lead-details-001",
       "name": "Get Lead Details",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [860, 350],
       "parameters": {
-        "resource": "lead",
-        "operation": "get",
-        "leadId": "={{ $json.data?.ID || $json.ID || $json.leadId }}"
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.get",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.data?.ID || $json.ID || $json.leadId }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
+      }
+    },
+    {
+      "id": "parse-lead-details-001",
+      "name": "Parse Lead Details Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [960, 350],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response\nconst response = $json;\n\nif (response && response.result) {\n  return [{ json: response.result }];\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  throw new Error(`Failed to get lead details: ${response.error}`);\n} else {\n  console.error('Invalid response');\n  throw new Error('Invalid Bitrix24 response');\n}"
       }
     },
     {
@@ -169,22 +188,35 @@
     {
       "id": "update-lead-status-001",
       "name": "Update Lead Status",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1660, 350],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.leadId }}",
-        "updateFields": {
-          "STATUS_ID": "IN_PROCESS",
-          "COMMENTS": "={{ $json.comments + '\\n\\n[' + new Date().toISOString() + '] Передан поставщику. КП отправлено.' }}"
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.update",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.leadId }}"
+            },
+            {
+              "name": "fields[STATUS_ID]",
+              "value": "IN_PROCESS"
+            },
+            {
+              "name": "fields[COMMENTS]",
+              "value": "={{ $json.comments + '\\n\\n[' + new Date().toISOString() + '] Передан поставщику. КП отправлено.' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -211,26 +243,43 @@
     {
       "id": "create-task-001",
       "name": "Create Follow-up Task",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [2060, 350],
       "parameters": {
-        "resource": "task",
-        "operation": "create",
-        "title": "={{ `Проверить статус горячего лида ${$json.leadName}` }}",
-        "description": "={{ `Проверить результат передачи горячего лида поставщику.\\n\\nКлуб: ${$json.leadName}\\nГород: ${$json.city}\\nПотенциал: ${$json.dealPotential.toLocaleString('ru-RU')} руб\\n\\nСвязаться с поставщиком и узнать статус переговоров.` }}",
-        "additionalFields": {
-          "deadline": "={{ new Date(Date.now() + 24*60*60*1000).toISOString() }}",
-          "responsible_id": "={{ $env.SALES_MANAGER_ID }}",
-          "crm": {
-            "lead": ["={{ $json.leadId }}"]
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}tasks.task.add",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields[TITLE]",
+              "value": "={{ `Проверить статус горячего лида ${$json.leadName}` }}"
+            },
+            {
+              "name": "fields[DESCRIPTION]",
+              "value": "={{ `Проверить результат передачи горячего лида поставщику.\\n\\nКлуб: ${$json.leadName}\\nГород: ${$json.city}\\nПотенциал: ${$json.dealPotential.toLocaleString('ru-RU')} руб\\n\\nСвязаться с поставщиком и узнать статус переговоров.` }}"
+            },
+            {
+              "name": "fields[DEADLINE]",
+              "value": "={{ new Date(Date.now() + 24*60*60*1000).toISOString() }}"
+            },
+            {
+              "name": "fields[RESPONSIBLE_ID]",
+              "value": "={{ $env.SALES_MANAGER_ID || 1 }}"
+            },
+            {
+              "name": "fields[UF_CRM_TASK]",
+              "value": "={{ ['L_' + $json.leadId] }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
           }
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
         }
       }
     },
@@ -301,6 +350,9 @@
       ]
     },
     "Get Lead Details": {
+      "main": [[{"node": "Parse Lead Details Response", "type": "main", "index": 0}]]
+    },
+    "Parse Lead Details Response": {
       "main": [[{"node": "Prepare Handoff Data", "type": "main", "index": 0}]]
     },
     "Prepare Handoff Data": {

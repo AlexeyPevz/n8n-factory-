@@ -2,27 +2,19 @@
   "name": "WF-06 Post Sale Followup",
   "nodes": [
     {
-      "id": "bitrix-trigger-001",
-      "name": "Bitrix24 Deal Success",
-      "type": "n8n-nodes-base.bitrix24Trigger",
-      "typeVersion": 1,
+      "id": "bitrix-webhook-001",
+      "name": "Bitrix24 Deal Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
       "position": [260, 400],
       "parameters": {
-        "eventsUi": {
-          "eventValues": [
-            {
-              "name": "onCrmDealUpdate"
-            }
-          ]
-        },
-        "additionalFields": {}
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "path": "bitrix24-deal-success",
+        "httpMethod": "POST",
+        "options": {
+          "responseData": "allEntries"
         }
-      }
+      },
+      "webhookId": "bitrix24-deal-success"
     },
     {
       "id": "manual-trigger-001",
@@ -75,39 +67,77 @@
     {
       "id": "get-deal-details-001",
       "name": "Get Deal Details",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [860, 350],
       "parameters": {
-        "resource": "deal",
-        "operation": "get",
-        "dealId": "={{ $json.data?.ID || $json.ID || $json.dealId }}"
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.deal.get",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.data?.ID || $json.ID || $json.dealId }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
+      }
+    },
+    {
+      "id": "parse-deal-details-001",
+      "name": "Parse Deal Details Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [960, 350],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response\nconst response = $json;\n\nif (response && response.result) {\n  return [{ json: response.result }];\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  throw new Error(`Failed to get deal details: ${response.error}`);\n} else {\n  console.error('Invalid response');\n  throw new Error('Invalid Bitrix24 response');\n}"
       }
     },
     {
       "id": "get-contact-details-001",
       "name": "Get Contact Details",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1060, 350],
       "parameters": {
-        "resource": "contact",
-        "operation": "get",
-        "contactId": "={{ $json.CONTACT_ID }}"
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.contact.get",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.CONTACT_ID }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "continueOnFail": true
+    },
+    {
+      "id": "parse-contact-details-001",
+      "name": "Parse Contact Details Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 350],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response\nconst response = $json;\n\nif (response && response.result) {\n  return [{ json: response.result }];\n} else if (response && response.error) {\n  console.error('Failed to get contact:', response.error);\n  // Return empty contact data\n  return [{ json: {} }];\n} else {\n  // Return empty contact data\n  return [{ json: {} }];\n}"
+      }
     },
     {
       "id": "prepare-followup-data-001",
@@ -116,7 +146,7 @@
       "typeVersion": 1,
       "position": [1260, 350],
       "parameters": {
-        "functionCode": "const deal = $node['Get Deal Details'].json;\nconst contact = $node['Get Contact Details'].json || {};\n\n// Подготавливаем данные для follow-up\nconst followupData = {\n  dealId: deal.ID,\n  dealTitle: deal.TITLE || 'Сделка',\n  clubName: deal.TITLE?.split(' - ')[0] || deal.COMPANY_TITLE || 'Клуб',\n  contactName: contact.NAME || deal.UF_CRM_CONTACT_NAME || 'Клиент',\n  contactPhone: contact.PHONE?.[0]?.VALUE || deal.UF_CRM_PHONE || '',\n  contactEmail: contact.EMAIL?.[0]?.VALUE || deal.UF_CRM_EMAIL || '',\n  telegram: contact.UF_CRM_TELEGRAM || deal.UF_CRM_TELEGRAM || '',\n  dealAmount: parseFloat(deal.OPPORTUNITY) || 0,\n  closeDate: deal.CLOSEDATE || new Date().toISOString(),\n  city: deal.UF_CRM_CITY || contact.ADDRESS_CITY || 'Не указан',\n  timestamp: new Date().toISOString()\n};\n\n// Создаем расписание follow-up контактов\nfollowupData.schedule = [\n  {\n    delay: 7,\n    type: 'satisfaction_check',\n    message: 'Проверка удовлетворенности после установки'\n  },\n  {\n    delay: 30,\n    type: 'first_month_feedback',\n    message: 'Обратная связь через месяц использования'\n  },\n  {\n    delay: 90,\n    type: 'quarterly_review',\n    message: 'Квартальный обзор и дополнительные потребности'\n  },\n  {\n    delay: 180,\n    type: 'upgrade_opportunity',\n    message: 'Предложение обновления/расширения'\n  }\n];\n\nconsole.log(`Preparing post-sale followup for ${followupData.clubName}`);\n\nreturn [{ json: followupData }];"
+        "functionCode": "const deal = $node['Parse Deal Details Response'].json;\nconst contact = $node['Parse Contact Details Response'].json || {};\n\n// Подготавливаем данные для follow-up\nconst followupData = {\n  dealId: deal.ID,\n  dealTitle: deal.TITLE || 'Сделка',\n  clubName: deal.TITLE?.split(' - ')[0] || deal.COMPANY_TITLE || 'Клуб',\n  contactName: contact.NAME || deal.UF_CRM_CONTACT_NAME || 'Клиент',\n  contactPhone: contact.PHONE?.[0]?.VALUE || deal.UF_CRM_PHONE || '',\n  contactEmail: contact.EMAIL?.[0]?.VALUE || deal.UF_CRM_EMAIL || '',\n  telegram: contact.UF_CRM_TELEGRAM || deal.UF_CRM_TELEGRAM || '',\n  dealAmount: parseFloat(deal.OPPORTUNITY) || 0,\n  closeDate: deal.CLOSEDATE || new Date().toISOString(),\n  city: deal.UF_CRM_CITY || contact.ADDRESS_CITY || 'Не указан',\n  timestamp: new Date().toISOString()\n};\n\n// Создаем расписание follow-up контактов\nfollowupData.schedule = [\n  {\n    delay: 7,\n    type: 'satisfaction_check',\n    message: 'Проверка удовлетворенности после установки'\n  },\n  {\n    delay: 30,\n    type: 'first_month_feedback',\n    message: 'Обратная связь через месяц использования'\n  },\n  {\n    delay: 90,\n    type: 'quarterly_review',\n    message: 'Квартальный обзор и дополнительные потребности'\n  },\n  {\n    delay: 180,\n    type: 'upgrade_opportunity',\n    message: 'Предложение обновления/расширения'\n  }\n];\n\nconsole.log(`Preparing post-sale followup for ${followupData.clubName}`);\n\nreturn [{ json: followupData }];"
       }
     },
     {
@@ -154,28 +184,51 @@
     {
       "id": "create-bitrix-task-001",
       "name": "Create Bitrix Task",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [2060, 350],
       "parameters": {
-        "resource": "task",
-        "operation": "create",
-        "title": "={{ $json.title }}",
-        "description": "={{ $json.description }}",
-        "additionalFields": {
-          "deadline": "={{ $json.deadline }}",
-          "responsible_id": "={{ $env.ACCOUNT_MANAGER_ID }}",
-          "priority": "1",
-          "crm": {
-            "deal": ["={{ $json.dealId }}"]
-          },
-          "tags": ["followup", "post-sale", "={{ $json.type }}"]
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}tasks.task.add",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields[TITLE]",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "fields[DESCRIPTION]",
+              "value": "={{ $json.description }}"
+            },
+            {
+              "name": "fields[DEADLINE]",
+              "value": "={{ $json.deadline }}"
+            },
+            {
+              "name": "fields[RESPONSIBLE_ID]",
+              "value": "={{ $env.ACCOUNT_MANAGER_ID || 1 }}"
+            },
+            {
+              "name": "fields[PRIORITY]",
+              "value": "1"
+            },
+            {
+              "name": "fields[UF_CRM_TASK]",
+              "value": "={{ ['D_' + $json.dealId] }}"
+            },
+            {
+              "name": "fields[TAGS]",
+              "value": "={{ ['followup', 'post-sale', $json.type] }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -293,7 +346,7 @@
     }
   ],
   "connections": {
-    "Bitrix24 Deal Success": {
+    "Bitrix24 Deal Webhook": {
       "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
     },
     "Manual Trigger": {
@@ -309,9 +362,15 @@
       ]
     },
     "Get Deal Details": {
+      "main": [[{"node": "Parse Deal Details Response", "type": "main", "index": 0}]]
+    },
+    "Parse Deal Details Response": {
       "main": [[{"node": "Get Contact Details", "type": "main", "index": 0}]]
     },
     "Get Contact Details": {
+      "main": [[{"node": "Parse Contact Details Response", "type": "main", "index": 0}]]
+    },
+    "Parse Contact Details Response": {
       "main": [[{"node": "Prepare Followup Data", "type": "main", "index": 0}]]
     },
     "Prepare Followup Data": {

@@ -1,0 +1,102 @@
+{
+  "name": "Config Storage",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {}
+    },
+    {
+      "id": "set-config",
+      "name": "Set Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "options": {},
+        "values": {
+          "values": [
+            {
+              "name": "WORKFLOW_IDS",
+              "type": "json",
+              "value": "{\n  \"WF_01\": \"REPLACE_WITH_YOUR_WF01_ID\",\n  \"WF_02\": \"REPLACE_WITH_YOUR_WF02_ID\",\n  \"WF_03\": \"REPLACE_WITH_YOUR_WF03_ID\",\n  \"WF_04\": \"REPLACE_WITH_YOUR_WF04_ID\",\n  \"WF_05\": \"REPLACE_WITH_YOUR_WF05_ID\",\n  \"WF_06\": \"REPLACE_WITH_YOUR_WF06_ID\"\n}"
+            },
+            {
+              "name": "GOOGLE_SHEET_ID",
+              "type": "string",
+              "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
+            },
+            {
+              "name": "TELEGRAM_ADMIN_CHAT_ID",
+              "type": "string",
+              "value": "REPLACE_WITH_YOUR_CHAT_ID"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "save-to-redis",
+      "name": "Save to Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "parameters": {
+        "operation": "set",
+        "key": "darkproject:config",
+        "value": "={{ JSON.stringify($json) }}",
+        "expire": false
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CREDENTIALS",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "id": "success-message",
+      "name": "Success Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "options": {},
+        "values": {
+          "values": [
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Configuration saved successfully! Make sure to update all workflow IDs with real values."
+            },
+            {
+              "name": "savedAt",
+              "type": "string",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Set Configuration", "type": "main", "index": 0}]]
+    },
+    "Set Configuration": {
+      "main": [[{"node": "Save to Redis", "type": "main", "index": 0}]]
+    },
+    "Save to Redis": {
+      "main": [[{"node": "Success Message", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 60
+  }
+}

@@ -99,7 +99,7 @@ MTPROTO_API_TOKEN=your-token
 
 ### 3.2 Импортируйте workflow в порядке:
 
-1. `20250109_wf-00-orchestrator_v007.json`
+1. `20250109_wf-00-orchestrator_v008.json`
 2. `20250109_wf-01-fetch-gaming-clubs_v005.json`
 3. `20250109_wf-02-enrich-contact-info_v004.json`
 4. `20250109_wf-03-upsert-crm_v002.json`
@@ -120,7 +120,7 @@ MTPROTO_API_TOKEN=your-token
 
 ### 4.2 Обновите значения
 
-Замените все `PLACEHOLDER_WF0X_ID` на реальные ID:
+Замените все значения на реальные ID:
 
 ```json
 {
@@ -133,7 +133,7 @@ MTPROTO_API_TOKEN=your-token
     "WF_06_WORKFLOW_ID": "128"
   },
   "TELEGRAM_ADMIN_CHAT_ID": "-1001234567890",  // <- Ваш chat ID
-  "GEO_TARGETS_CSV_PATH": "./data/geo_targets.csv"
+  "GOOGLE_SHEET_ID": "1234567890abcdef"  // <- ID вашей Google таблицы
 }
 ```
 

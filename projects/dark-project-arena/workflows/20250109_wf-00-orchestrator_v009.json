@@ -1,0 +1,399 @@
+{
+  "name": "WF-00 Orchestrator",
+  "nodes": [
+    {
+      "id": "schedule-trigger-001",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [260, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "error-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [260, 500],
+      "parameters": {}
+    },
+    {
+      "id": "exec-trigger-001",
+      "name": "Execute Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [260, 400],
+      "parameters": {}
+    },
+    {
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [460, 400],
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "single"
+      }
+    },
+    {
+      "id": "log-start-001",
+      "name": "Log Start",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 400],
+      "parameters": {
+        "functionCode": "const runId = `run_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;\nconst trigger = $execution.mode;\nconst startTime = new Date();\n\nconsole.log(`[WF-00] Starting orchestrator run ${runId} via ${trigger}`);\n\n// Check if we have error context\nif ($json.error) {\n  console.error('[WF-00] Error trigger activated:', $json.error);\n  // Send notification about error\n  return [{ \n    json: {\n      runId,\n      trigger: 'error',\n      error: $json.error,\n      startTime: startTime.toISOString()\n    } \n  }];\n}\n\nreturn [{ \n  json: {\n    runId,\n    trigger,\n    startTime: startTime.toISOString(),\n    wave: 1\n  } \n}];"
+      }
+    },
+    {
+      "id": "check-sheets-cache-001",
+      "name": "Check Sheets Cache",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [860, 400],
+      "parameters": {
+        "operation": "get",
+        "key": "darkproject:sheets:data"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "route-cache-001",
+      "name": "Cache Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1060, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hasCache",
+              "leftValue": "={{ $json.value ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "parse-cache-001",
+      "name": "Parse Cache",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1260, 300],
+      "parameters": {
+        "functionCode": "try {\n  const cachedData = JSON.parse($json.value);\n  console.log(`[WF-00] Using cached data with ${cachedData.cities.length} cities`);\n  \n  return [{\n    json: {\n      ...$node['Log Start'].json,\n      cities: cachedData.cities,\n      config: cachedData.config,\n      fromCache: true\n    }\n  }];\n} catch (error) {\n  console.error('[WF-00] Failed to parse cache:', error);\n  throw error;\n}"
+      }
+    },
+    {
+      "id": "read-google-sheets-001",
+      "name": "Read Cities from Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1260, 500],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Города"
+        },
+        "options": {
+          "returnAllMatches": true,
+          "dataStartRow": 2
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_API",
+          "name": "Google Sheets API"
+        }
+      }
+    },
+    {
+      "id": "process-cities-001",
+      "name": "Process Cities",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 400],
+      "parameters": {
+        "functionCode": "const runData = $node['Log Start'].json;\nlet cities = [];\n\nif ($json.fromCache) {\n  cities = $json.cities;\n} else {\n  // Parse Google Sheets data\n  const sheetData = $node['Read Cities from Google Sheets'].json;\n  cities = sheetData\n    .filter(row => row['Активен'] === 'ДА')\n    .map(row => ({\n      city: row['Город'],\n      region: row['Регион'],\n      priority: row['Приоритет'],\n      population: parseInt(row['Население']) || 0,\n      cityId2gis: row['ID 2GIS'] || '',\n      lat: parseFloat(row['Широта']) || 0,\n      lon: parseFloat(row['Долгота']) || 0,\n      lastSearch: row['Последний поиск'] || ''\n    }));\n  \n  console.log(`[WF-00] Loaded ${cities.length} active cities from Google Sheets`);\n}\n\n// Filter by priority and last search date\nconst now = new Date();\nconst daysSince = (dateStr) => {\n  if (!dateStr) return 999;\n  const date = new Date(dateStr);\n  return Math.floor((now - date) / (1000 * 60 * 60 * 24));\n};\n\n// High priority cities - search every 7 days\nconst highPriority = cities.filter(c => \n  c.priority === 'Высокий' && daysSince(c.lastSearch) >= 7\n);\n\n// Medium priority - every 14 days\nconst mediumPriority = cities.filter(c => \n  c.priority === 'Средний' && daysSince(c.lastSearch) >= 14\n);\n\n// Low priority - every 30 days\nconst lowPriority = cities.filter(c => \n  c.priority === 'Низкий' && daysSince(c.lastSearch) >= 30\n);\n\n// Combine and limit to 10 cities per run\nconst citiesToProcess = [...highPriority, ...mediumPriority, ...lowPriority].slice(0, 10);\n\nconsole.log(`[WF-00] Selected ${citiesToProcess.length} cities for processing`);\n\nreturn [{\n  json: {\n    ...runData,\n    cities: citiesToProcess,\n    stats: {\n      total: cities.length,\n      highPriority: highPriority.length,\n      mediumPriority: mediumPriority.length,\n      lowPriority: lowPriority.length,\n      selected: citiesToProcess.length\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "split-cities-001",
+      "name": "Split Cities",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1660, 400],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "run-wf01-001",
+      "name": "Run WF-01 per City",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1860, 400],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $env.WF_01_WORKFLOW_ID }}",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "wait-between-cities-001",
+      "name": "Wait Between Cities",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2060, 400],
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "update-last-search-001",
+      "name": "Update Last Search Date",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [2260, 400],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Города"
+        },
+        "dataMode": "autoMapInputData",
+        "columnToMatchOn": "Город",
+        "valueInputMode": "USER_ENTERED",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "Последний поиск",
+              "fieldValue": "={{ new Date().toISOString().split('T')[0] }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_API",
+          "name": "Google Sheets API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "log-progress-001",
+      "name": "Log Progress",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2460, 400],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'orchestrator:progress:' + $node['Log Start'].json.runId }}",
+        "value": "={{ JSON.stringify({city: $json.city, timestamp: new Date().toISOString(), result: $json.result || 'completed'}) }}",
+        "expire": true,
+        "ttl": 86400
+      },
+      "credentials": {
+        "redis": {
+          "id": "REDIS_INTERNAL",
+          "name": "Redis Internal"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "merge-results-001",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1860, 600],
+      "parameters": {
+        "mode": "multiplex",
+        "options": {}
+      }
+    },
+    {
+      "id": "notify-complete-001",
+      "name": "Notify Complete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2060, 600],
+      "parameters": {
+        "authentication": "token",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "=🎯 *WF-00 Orchestrator Complete*\n\n📊 Statistics:\n• Total cities: {{ $json.stats.total }}\n• Processed: {{ $json.stats.selected }}\n• Run ID: `{{ $json.runId }}`\n• Duration: {{ Math.round((Date.now() - new Date($json.startTime).getTime()) / 60000) }} min\n\n✅ Ready for next wave",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "handle-error-001",
+      "name": "Handle Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [660, 600],
+      "parameters": {
+        "functionCode": "const error = $json.error;\nconsole.error('[WF-00] Handling error:', error);\n\n// Store error in Redis\nreturn [{\n  json: {\n    error: error,\n    workflow: error.workflow || 'WF-00',\n    timestamp: new Date().toISOString(),\n    severity: 'error'\n  }\n}];"
+      }
+    },
+    {
+      "id": "notify-error-001",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [860, 600],
+      "parameters": {
+        "authentication": "token",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
+        "text": "=❌ *Error in {{ $json.workflow }}*\n\n{{ $json.error.message || $json.error }}\n\nTime: {{ $json.timestamp }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT",
+          "name": "Telegram Bot"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+    },
+    "Execute Trigger": {
+      "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
+    },
+    "Error Trigger": {
+      "main": [[{"node": "Handle Error", "type": "main", "index": 0}]]
+    },
+    "Merge Triggers": {
+      "main": [[{"node": "Log Start", "type": "main", "index": 0}]]
+    },
+    "Log Start": {
+      "main": [[{"node": "Check Sheets Cache", "type": "main", "index": 0}]]
+    },
+    "Check Sheets Cache": {
+      "main": [[{"node": "Cache Exists?", "type": "main", "index": 0}]]
+    },
+    "Cache Exists?": {
+      "main": [
+        [{"node": "Parse Cache", "type": "main", "index": 0}],
+        [{"node": "Read Cities from Google Sheets", "type": "main", "index": 0}]
+      ]
+    },
+    "Parse Cache": {
+      "main": [[{"node": "Process Cities", "type": "main", "index": 0}]]
+    },
+    "Read Cities from Google Sheets": {
+      "main": [[{"node": "Process Cities", "type": "main", "index": 0}]]
+    },
+    "Process Cities": {
+      "main": [[{"node": "Split Cities", "type": "main", "index": 0}]]
+    },
+    "Split Cities": {
+      "main": [
+        [{"node": "Run WF-01 per City", "type": "main", "index": 0}],
+        [{"node": "Merge Results", "type": "main", "index": 0}]
+      ]
+    },
+    "Run WF-01 per City": {
+      "main": [[{"node": "Wait Between Cities", "type": "main", "index": 0}]]
+    },
+    "Wait Between Cities": {
+      "main": [[{"node": "Update Last Search Date", "type": "main", "index": 0}]]
+    },
+    "Update Last Search Date": {
+      "main": [[{"node": "Log Progress", "type": "main", "index": 0}]]
+    },
+    "Log Progress": {
+      "main": [[{"node": "Split Cities", "type": "main", "index": 0}]]
+    },
+    "Merge Results": {
+      "main": [[{"node": "Notify Complete", "type": "main", "index": 0}]]
+    },
+    "Handle Error": {
+      "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
+    }
+  },
+  "tags": [
+    {
+      "id": "1",
+      "name": "production"
+    },
+    {
+      "id": "2",
+      "name": "orchestrator"
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 3600,
+    "timezone": "Europe/Moscow"
+  },
+  "versionId": "b8c0d0f1-0a2e-4c3f-9e8d-7a6b5c4d3e2f"
+}

@@ -100,44 +100,88 @@
     {
       "id": "load-lead-from-crm-001",
       "name": "Load Lead from CRM",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1060, 300],
       "parameters": {
-        "resource": "lead",
-        "operation": "get",
-        "leadId": "={{ $json.leadId || $json.leadContext.leadId }}"
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.get",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.leadId || $json.leadContext.leadId }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
+      }
+    },
+    {
+      "id": "parse-load-lead-001",
+      "name": "Parse Load Lead Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 300],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response for single lead\nconst response = $json;\n\nif (response && response.result) {\n  // Single lead returned as object\n  return [{ json: response.result }];\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  return [];\n} else {\n  console.error('Invalid Bitrix24 response');\n  return [];\n}"
       }
     },
     {
       "id": "search-lead-by-telegram-001",
       "name": "Search Lead by Telegram",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1060, 500],
       "parameters": {
-        "resource": "lead",
-        "operation": "getAll",
-        "filters": {
-          "filter": {
-            "UF_CRM_TELEGRAM_ID": "={{ $json.userId }}"
-          }
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.list",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filter[UF_CRM_TELEGRAM_ID]",
+              "value": "={{ $json.userId }}"
+            },
+            {
+              "name": "select[]",
+              "value": "ID"
+            },
+            {
+              "name": "select[]",
+              "value": "TITLE"
+            },
+            {
+              "name": "select[]",
+              "value": "STATUS_ID"
+            },
+            {
+              "name": "select[]",
+              "value": "PHONE"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_TELEGRAM"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_DIALOG_HISTORY"
+            }
+          ]
         },
         "options": {
-          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "UF_CRM_TELEGRAM", "UF_CRM_DIALOG_HISTORY"],
-          "limit": 1
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -180,6 +224,16 @@
         "mode": "combine",
         "combinationMode": "mergeByPosition",
         "options": {}
+      }
+    },
+    {
+      "id": "parse-search-telegram-001",
+      "name": "Parse Search by Telegram Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 500],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response for lead list\nconst response = $json;\n\nif (response && response.result && Array.isArray(response.result)) {\n  if (response.result.length > 0) {\n    // Return first lead found\n    return [{ json: response.result[0] }];\n  } else {\n    // No leads found\n    return [];\n  }\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  return [];\n} else {\n  console.error('Invalid Bitrix24 response');\n  return [];\n}"
       }
     },
     {
@@ -334,45 +388,74 @@
     {
       "id": "update-crm-dialog-001",
       "name": "Update CRM Dialog History",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [2460, 300],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.context.leadId }}",
-        "updateFields": {
-          "UF_CRM_DIALOG_HISTORY": "={{ JSON.stringify($json.updatedHistory) }}",
-          "UF_CRM_LAST_CONTACT": "={{ new Date().toISOString() }}",
-          "UF_CRM_CONTACT_COUNT": "={{ $json.updatedHistory.length }}"
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.update",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.context.leadId }}"
+            },
+            {
+              "name": "fields[UF_CRM_DIALOG_HISTORY]",
+              "value": "={{ JSON.stringify($json.updatedHistory) }}"
+            },
+            {
+              "name": "fields[UF_CRM_LAST_CONTACT]",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "fields[UF_CRM_CONTACT_COUNT]",
+              "value": "={{ $json.updatedHistory.length }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
     {
       "id": "update-lead-status-001",
       "name": "Update Lead Status",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [2460, 500],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.context.leadId }}",
-        "updateFields": {
-          "STATUS_ID": "={{ $json.newStatus }}",
-          "COMMENTS": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Intent: ' + $json.intent + '\\nAgent: ' + $json.agentResponse.substring(0, 200) + '...' }}"
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.update",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.context.leadId }}"
+            },
+            {
+              "name": "fields[STATUS_ID]",
+              "value": "={{ $json.newStatus }}"
+            },
+            {
+              "name": "fields[COMMENTS]",
+              "value": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Intent: ' + $json.intent + '\\nAgent: ' + $json.agentResponse.substring(0, 200) + '...' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -628,28 +711,74 @@
     {
       "id": "get-new-leads-001",
       "name": "Get New Leads from CRM",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [460, 200],
       "parameters": {
-        "resource": "lead",
-        "operation": "getAll",
-        "filters": {
-          "filter": {
-            "STATUS_ID": "NEW",
-            "UF_CRM_CONTACT_COUNT": 0
-          }
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.list",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filter[STATUS_ID]",
+              "value": "NEW"
+            },
+            {
+              "name": "filter[UF_CRM_CONTACT_COUNT]",
+              "value": "0"
+            },
+            {
+              "name": "select[]",
+              "value": "ID"
+            },
+            {
+              "name": "select[]",
+              "value": "TITLE"
+            },
+            {
+              "name": "select[]",
+              "value": "PHONE"
+            },
+            {
+              "name": "select[]",
+              "value": "EMAIL"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_TELEGRAM"
+            },
+            {
+              "name": "select[]",
+              "value": "ADDRESS_CITY"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_IS_CHAIN"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_ESTIMATED_PCS"
+            }
+          ]
         },
         "options": {
-          "select": ["ID", "TITLE", "PHONE", "EMAIL", "UF_CRM_TELEGRAM", "ADDRESS_CITY", "UF_CRM_IS_CHAIN", "UF_CRM_ESTIMATED_PCS"],
-          "limit": 10
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
-        }
+      }
+    },
+    {
+      "id": "parse-new-leads-001",
+      "name": "Parse New Leads Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [560, 200],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response for lead list\nconst response = $json;\n\nif (response && response.result && Array.isArray(response.result)) {\n  // Return each lead as separate item\n  return response.result.map(lead => ({ json: lead }));\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  return [];\n} else {\n  console.error('Invalid Bitrix24 response');\n  return [];\n}"
       }
     },
     {
@@ -776,22 +905,35 @@
     {
       "id": "update-contact-in-crm-001",
       "name": "Update Contact in CRM",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [2460, 100],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.newContactInfo.leadId }}",
-        "updateFields": {
-          "fields": "={{ $json.newContactInfo.type === 'telegram' ? { UF_CRM_TELEGRAM: $json.newContactInfo.value, UF_CRM_PREFERRED_CHANNEL: 'telegram' } : $json.newContactInfo.type === 'email' ? { EMAIL: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'email' } : { PHONE: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'phone' } }}",
-          "COMMENTS": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Клиент предоставил новый контакт: ' + $json.newContactInfo.type + ' - ' + $json.newContactInfo.value }}"
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.update",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.newContactInfo.leadId }}"
+            },
+            {
+              "name": "fields",
+              "value": "={{ JSON.stringify($json.newContactInfo.type === 'telegram' ? { UF_CRM_TELEGRAM: $json.newContactInfo.value, UF_CRM_PREFERRED_CHANNEL: 'telegram' } : $json.newContactInfo.type === 'email' ? { EMAIL: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'email' } : { PHONE: [{ VALUE: $json.newContactInfo.value, VALUE_TYPE: 'WORK' }], UF_CRM_PREFERRED_CHANNEL: 'phone' }) }}"
+            },
+            {
+              "name": "fields[COMMENTS]",
+              "value": "={{ $json.context.COMMENTS + '\\n\\n[' + new Date().toISOString() + '] Клиент предоставил новый контакт: ' + $json.newContactInfo.type + ' - ' + $json.newContactInfo.value }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -832,9 +974,15 @@
       ]
     },
     "Load Lead from CRM": {
+      "main": [[{"node": "Parse Load Lead Response", "type": "main", "index": 0}]]
+    },
+    "Parse Load Lead Response": {
       "main": [[{"node": "Merge Lead Data", "type": "main", "index": 0}]]
     },
     "Search Lead by Telegram": {
+      "main": [[{"node": "Parse Search by Telegram Response", "type": "main", "index": 0}]]
+    },
+    "Parse Search by Telegram Response": {
       "main": [[{"node": "Merge Lead Data", "type": "main", "index": 1}]]
     },
     "Merge Lead Data": {
@@ -858,12 +1006,12 @@
     "Conversation Memory": {
       "ai_memory": [[{"node": "Sales Agent РОП 20Y", "type": "ai_memory", "index": 0}]]
     },
-          "GPT-4 Chat Model": {
-        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
-      },
-      "GPT-3.5 Fallback Model": {
-        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
-      },
+    "GPT-4 Chat Model": {
+      "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
+    },
+    "GPT-3.5 Fallback Model": {
+      "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
+    },
     "Sales Agent РОП 20Y": {
       "main": [[{"node": "Parse Agent Response", "type": "main", "index": 0}]]
     },
@@ -923,6 +1071,9 @@
       "main": [[{"node": "Get New Leads from CRM", "type": "main", "index": 0}]]
     },
     "Get New Leads from CRM": {
+      "main": [[{"node": "Parse New Leads Response", "type": "main", "index": 0}]]
+    },
+    "Parse New Leads Response": {
       "main": [[{"node": "Split New Leads", "type": "main", "index": 0}]]
     },
     "Split New Leads": {
