@@ -917,29 +917,23 @@
       ]
     },
     "Generate Initial KP": {
-      "main": [[{"node": "Detect Contact Change Request", "type": "main", "index": 0}]]
+      "main": [[{"node": "Route by Channel", "type": "main", "index": 0}]]
     },
     "Detect Contact Change Request": {
       "main": [[{"node": "Route Contact Update", "type": "main", "index": 0}]]
     },
-         "Detect Contact Change Request": {
-       "main": [[{"node": "Route Contact Update", "type": "main", "index": 0}]]
-     },
-     "Route Contact Update": {
-       "main": [
-         [{"node": "Update Contact in CRM", "type": "main", "index": 0}],
-         [{"node": "Update CRM Dialog History", "type": "main", "index": 0}]
-       ]
-     },
-     "Update Contact in CRM": {
-       "main": [[{"node": "Send to New Contact", "type": "main", "index": 0}]]
-     },
-     "Send to New Contact": {
-       "main": [[{"node": "Update CRM Dialog History", "type": "main", "index": 0}]]
-     },
-     "Generate Initial KP": {
-       "main": [[{"node": "Send Telegram Message", "type": "main", "index": 0}]]
-     }
+    "Route Contact Update": {
+      "main": [
+        [{"node": "Update Contact in CRM", "type": "main", "index": 0}],
+        [{"node": "Update CRM Dialog History", "type": "main", "index": 0}]
+      ]
+    },
+    "Update Contact in CRM": {
+      "main": [[{"node": "Send to New Contact", "type": "main", "index": 0}]]
+    },
+    "Send to New Contact": {
+      "main": [[{"node": "Update CRM Dialog History", "type": "main", "index": 0}]]
+    }
   },
   "active": false,
   "settings": {
