@@ -90,54 +90,126 @@
     {
       "id": "bitrix24-search-001",
       "name": "Search Duplicate in Bitrix24",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1060, 400],
       "parameters": {
-        "resource": "lead",
-        "operation": "getAll",
-        "filters": {
-          "filter": {
-            "PHONE": "={{ $json.searchPhone }}"
-          }
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.list",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filter[PHONE]",
+              "value": "={{ $json.searchPhone }}"
+            },
+            {
+              "name": "select[]",
+              "value": "ID"
+            },
+            {
+              "name": "select[]",
+              "value": "TITLE"
+            },
+            {
+              "name": "select[]",
+              "value": "STATUS_ID"
+            },
+            {
+              "name": "select[]",
+              "value": "PHONE"
+            },
+            {
+              "name": "select[]",
+              "value": "COMMENTS"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_ENRICHED_AT"
+            }
+          ]
         },
         "options": {
-          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "COMMENTS", "UF_CRM_ENRICHED_AT"],
-          "limit": 10
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "continueOnFail": true
     },
     {
+      "id": "parse-phone-search-001",
+      "name": "Parse Phone Search Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 400],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response\nconst response = $json;\n\n// Check if we have a valid response with result\nif (response && response.result) {\n  return response.result.map(lead => ({ json: lead }));\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  return [];\n} else {\n  console.error('Invalid Bitrix24 response');\n  return [];\n}"
+      }
+    },
+    {
       "id": "bitrix24-search-namecity-001",
       "name": "Search Duplicate by Name+City",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1060, 500],
       "parameters": {
-        "resource": "lead",
-        "operation": "getAll",
-        "filters": {
-          "filter": {
-            "TITLE": "={{ $node['Prepare Search'].json.searchName }}",
-            "ADDRESS_CITY": "={{ $node['Prepare Search'].json.enrichedClub.city }}"
-          }
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.list",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filter[TITLE]",
+              "value": "={{ $node['Prepare Search'].json.searchName }}"
+            },
+            {
+              "name": "filter[ADDRESS_CITY]",
+              "value": "={{ $node['Prepare Search'].json.enrichedClub.city }}"
+            },
+            {
+              "name": "select[]",
+              "value": "ID"
+            },
+            {
+              "name": "select[]",
+              "value": "TITLE"
+            },
+            {
+              "name": "select[]",
+              "value": "STATUS_ID"
+            },
+            {
+              "name": "select[]",
+              "value": "PHONE"
+            },
+            {
+              "name": "select[]",
+              "value": "COMMENTS"
+            }
+          ]
         },
         "options": {
-          "select": ["ID", "TITLE", "STATUS_ID", "PHONE", "COMMENTS"],
-          "limit": 10
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
-      "credentials": {
-        "bitrix24Api": {"id": "BITRIX24_CRM", "name": "Bitrix24 CRM"}
-      },
       "continueOnFail": true
+    },
+    {
+      "id": "parse-namecity-search-001",
+      "name": "Parse Name+City Search Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1160, 500],
+      "parameters": {
+        "functionCode": "// Parse Bitrix24 HTTP response\nconst response = $json;\n\n// Check if we have a valid response with result\nif (response && response.result) {\n  return response.result.map(lead => ({ json: lead }));\n} else if (response && response.error) {\n  console.error('Bitrix24 error:', response.error);\n  return [];\n} else {\n  console.error('Invalid Bitrix24 response');\n  return [];\n}"
+      }
     },
     {
       "id": "decide-fallback-search-001",
@@ -227,39 +299,58 @@
     {
       "id": "bitrix24-create-001",
       "name": "Create New Lead",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1860, 300],
       "parameters": {
-        "resource": "lead",
-        "operation": "create",
-        "additionalFields": "={{ $json.fields }}"
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.add",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "={{ JSON.stringify($json.fields) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
     {
       "id": "bitrix24-update-001",
       "name": "Update Existing Lead",
-      "type": "n8n-nodes-base.bitrix24",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [1860, 500],
       "parameters": {
-        "resource": "lead",
-        "operation": "update",
-        "leadId": "={{ $json.id }}",
-        "updateFields": {
-          "fields": "={{ $json.fields }}"
-        }
-      },
-      "credentials": {
-        "bitrix24Api": {
-          "id": "BITRIX24_CRM",
-          "name": "Bitrix24 CRM"
+        "method": "POST",
+        "url": "={{ $env.BITRIX24_WEBHOOK_URL }}crm.lead.update",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "fields",
+              "value": "={{ JSON.stringify($json.fields) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       }
     },
@@ -282,7 +373,7 @@
       "typeVersion": 1,
       "position": [2260, 400],
       "parameters": {
-        "functionCode": "// Determine if this was a create or update\nconst isUpdate = $json.action === 'update';\nconst leadId = $json.id || $json.ID || $json.result;\nconst club = $json.enrichedClub || $node['Prepare Search'].json.enrichedClub;\n\nconst response = {\n  success: true,\n  action: isUpdate ? 'updated' : 'created',\n  leadId: leadId,\n  clubName: club.name || club.title,\n  clubCity: club.city,\n  priority: club.priority,\n  relevanceScore: club.relevanceScore,\n  estimatedPCs: club.estimatedPCs,\n  leadScore: club.leadScore,\n  enrichedFields: {\n    email: !!club.email,\n    telegram: !!club.telegram,\n    vk: !!club.vk,\n    instagram: !!club.instagram\n  },\n  timestamp: new Date().toISOString()\n};\n\nconsole.log(`CRM ${response.action}: Lead ${response.leadId} for ${response.clubName}`);\n\nreturn [{ json: response }];"
+        "functionCode": "// Parse Bitrix24 HTTP response and determine action\nconst httpResponse = $json;\nconst isUpdate = httpResponse.fields ? false : true; // if fields present, it came from prepare node (create)\n\n// Get lead ID from response\nlet leadId;\nif (httpResponse.result) {\n  leadId = httpResponse.result;\n} else if (httpResponse.id) {\n  leadId = httpResponse.id;\n} else {\n  console.error('Failed to get lead ID from response');\n  leadId = null;\n}\n\n// Get club data\nconst club = httpResponse.enrichedClub || $node['Prepare Search'].json.enrichedClub;\n\nconst response = {\n  success: !!leadId,\n  action: isUpdate ? 'updated' : 'created',\n  leadId: leadId,\n  clubName: club.name || club.title,\n  clubCity: club.city,\n  priority: club.priority,\n  relevanceScore: club.relevanceScore,\n  estimatedPCs: club.estimatedPCs,\n  leadScore: club.leadScore,\n  enrichedFields: {\n    email: !!club.email,\n    telegram: !!club.telegram,\n    vk: !!club.vk,\n    instagram: !!club.instagram\n  },\n  timestamp: new Date().toISOString()\n};\n\nif (httpResponse.error) {\n  response.success = false;\n  response.error = httpResponse.error;\n  console.error(`CRM Error: ${httpResponse.error}`);\n}\n\nconsole.log(`CRM ${response.action}: Lead ${response.leadId} for ${response.clubName}`);\n\nreturn [{ json: response }];"
       }
     },
     {
@@ -423,6 +514,9 @@
       "main": [[{"node": "Search Duplicate in Bitrix24", "type": "main", "index": 0}]]
     },
     "Search Duplicate in Bitrix24": {
+      "main": [[{"node": "Parse Phone Search Results", "type": "main", "index": 0}]]
+    },
+    "Parse Phone Search Results": {
       "main": [[{"node": "Need Fallback Search?", "type": "main", "index": 0}]]
     },
     "Need Fallback Search?": {
@@ -432,6 +526,9 @@
       ]
     },
     "Search Duplicate by Name+City": {
+      "main": [[{"node": "Parse Name+City Search Results", "type": "main", "index": 0}]]
+    },
+    "Parse Name+City Search Results": {
       "main": [[{"node": "Combine Duplicate Results", "type": "main", "index": 0}]]
     },
     "Combine Duplicate Results": {
