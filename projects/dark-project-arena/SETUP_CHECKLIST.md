@@ -152,30 +152,39 @@ WORK_HOURS_END | 18 | Конец рабочего дня
 | WF-05 | b3P8Wk7T |
 | WF-06 | c4Q9Xl8U |
 
-## 📝 Шаг 5: Настройка Static Data
+## 📝 Шаг 5: Настройка переменных окружения
 
-### В WF-00:
-1. Откройте WF-00
-2. Меню (три точки) → Settings → Static Data
-3. Замените значения:
+### Создайте файл .env в папке n8n:
+```bash
+# Workflow IDs (берутся из URL после импорта)
+WF_01_WORKFLOW_ID=x9L4Sg3P
+WF_02_WORKFLOW_ID=y0M5Th4Q
+WF_03_WORKFLOW_ID=z1N6Ui5R
+WF_04_WORKFLOW_ID=a2O7Vj6S
+WF_05_WORKFLOW_ID=b3P8Wk7T
+WF_06_WORKFLOW_ID=c4Q9Xl8U
 
-```json
-{
-  "WORKFLOW_IDS": {
-    "WF_01_WORKFLOW_ID": "x9L4Sg3P",  // <- Ваш реальный ID
-    "WF_02_WORKFLOW_ID": "y0M5Th4Q",  // <- Ваш реальный ID
-    "WF_03_WORKFLOW_ID": "z1N6Ui5R",  // <- Ваш реальный ID
-    "WF_04_WORKFLOW_ID": "a2O7Vj6S",  // <- Ваш реальный ID
-    "WF_05_WORKFLOW_ID": "b3P8Wk7T",  // <- Ваш реальный ID
-    "WF_06_WORKFLOW_ID": "c4Q9Xl8U"   // <- Ваш реальный ID
-  },
-  "TELEGRAM_ADMIN_CHAT_ID": "-1001234567890",  // <- Ваш chat ID
-  "GOOGLE_SHEET_ID": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"  // <- ID вашей таблицы
-}
+# Google Sheets
+GOOGLE_SHEET_ID=1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+
+# Telegram
+TELEGRAM_ADMIN_CHAT_ID=-1001234567890
+
+# API Keys (добавьте свои)
+YANDEX_MAPS_API_KEY=your_key_here
+TWOGIS_API_KEY=your_key_here
+# ... остальные ключи из ENVIRONMENT_VARIABLES.md
 ```
 
-### В Google Sync workflow:
-Аналогично добавьте `GOOGLE_SHEET_ID`
+### Перезапустите n8n:
+```bash
+# Если используете Docker
+docker-compose restart n8n
+
+# Если используете npm
+# Ctrl+C для остановки, затем снова запустите
+n8n start
+```
 
 ## 🏢 Шаг 6: Bitrix24 настройка
 

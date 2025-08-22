@@ -124,7 +124,7 @@
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $staticData.GOOGLE_SHEET_ID }}"
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
         },
         "sheetName": {
           "__rl": true,
@@ -174,7 +174,7 @@
         "source": "database",
         "workflowId": {
           "__rl": true,
-          "value": "={{ $staticData.WORKFLOW_IDS.WF_01_WORKFLOW_ID }}",
+          "value": "={{ $env.WF_01_WORKFLOW_ID }}",
           "mode": "id"
         },
         "options": {
@@ -205,7 +205,7 @@
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "={{ $staticData.GOOGLE_SHEET_ID }}"
+          "value": "={{ $env.GOOGLE_SHEET_ID }}"
         },
         "sheetName": {
           "__rl": true,
@@ -272,7 +272,7 @@
       "position": [2060, 600],
       "parameters": {
         "authentication": "token",
-        "chatId": "={{ $staticData.TELEGRAM_ADMIN_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
         "text": "=🎯 *WF-00 Orchestrator Complete*\n\n📊 Statistics:\n• Total cities: {{ $json.stats.total }}\n• Processed: {{ $json.stats.selected }}\n• Run ID: `{{ $json.runId }}`\n• Duration: {{ Math.round((Date.now() - new Date($json.startTime).getTime()) / 60000) }} min\n\n✅ Ready for next wave",
         "additionalFields": {
           "parse_mode": "Markdown"
@@ -304,7 +304,7 @@
       "position": [860, 600],
       "parameters": {
         "authentication": "token",
-        "chatId": "={{ $staticData.TELEGRAM_ADMIN_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_ADMIN_CHAT_ID }}",
         "text": "=❌ *Error in {{ $json.workflow }}*\n\n{{ $json.error.message || $json.error }}\n\nTime: {{ $json.timestamp }}",
         "additionalFields": {
           "parse_mode": "Markdown"
@@ -377,18 +377,6 @@
     "Handle Error": {
       "main": [[{"node": "Notify Error", "type": "main", "index": 0}]]
     }
-  },
-  "staticData": {
-    "WORKFLOW_IDS": {
-      "WF_01_WORKFLOW_ID": "REPLACE_WITH_WF01_ID",
-      "WF_02_WORKFLOW_ID": "REPLACE_WITH_WF02_ID",
-      "WF_03_WORKFLOW_ID": "REPLACE_WITH_WF03_ID",
-      "WF_04_WORKFLOW_ID": "REPLACE_WITH_WF04_ID",
-      "WF_05_WORKFLOW_ID": "REPLACE_WITH_WF05_ID",
-      "WF_06_WORKFLOW_ID": "REPLACE_WITH_WF06_ID"
-    },
-    "TELEGRAM_ADMIN_CHAT_ID": "REPLACE_WITH_YOUR_CHAT_ID",
-    "GOOGLE_SHEET_ID": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID"
   },
   "tags": [
     {

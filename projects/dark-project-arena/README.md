@@ -78,7 +78,7 @@ Google Sheets            # Внешнее управление данными
 
 ## 📚 Документация
 
-- [STATIC_DATA_SETUP.md](./STATIC_DATA_SETUP.md) - Настройка конфигурации в workflow
+
 - [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Переменные окружения (только секреты)
 - [MTPROTO_SETUP.md](./MTPROTO_SETUP.md) - Настройка Telegram userbot
 - [WF-04-AGENT-DOCUMENTATION.md](./WF-04-AGENT-DOCUMENTATION.md) - Детали AI Agent
@@ -106,18 +106,19 @@ docker-compose up -d mtproto
    ```
 
 2. Импортируйте workflow (последние версии):
-   - `20250109_wf-00-orchestrator_v008.json`
+   - `20250109_wf-00-orchestrator_v009.json`
    - `20250109_wf-01-fetch-gaming-clubs_v005.json`
    - `20250109_wf-02-enrich-contact-info_v004.json`
    - `20250109_wf-03-upsert-crm_v002.json`
    - `20250109_wf-04-sales-nurture-agent_v006.json`
    - `20250109_wf-05-hot-lead-handoff_v001.json`
    - `20250109_wf-06-post-sale-followup_v002.json`
+   - `google-sheets-sync.json`
 
-3. Настройте Static Data в WF-00:
-   - Откройте WF-00 → Settings → Static Data
-   - Замените все `PLACEHOLDER_WF0X_ID` на реальные ID
-   - Обновите `TELEGRAM_ADMIN_CHAT_ID`
+3. Настройте переменные окружения:
+   - Скопируйте ID workflow из URL после импорта
+   - Добавьте в `.env` файл все ID (см. ENVIRONMENT_VARIABLES.md)
+   - Перезапустите n8n
 
 4. Настройте credentials:
    - Bitrix24 API

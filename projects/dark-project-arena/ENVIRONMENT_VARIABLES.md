@@ -1,10 +1,27 @@
-# Переменные окружения для Dark Project Arena
+# Environment Variables
 
-## ⚠️ Важное изменение!
+## 🔐 Required Environment Variables
 
 **Конфигурационные переменные (workflow IDs, пути, лимиты) теперь хранятся в Static Data!**
 
 См. [STATIC_DATA_SETUP.md](./STATIC_DATA_SETUP.md) для настройки workflow IDs и других параметров.
+
+### 🆔 Workflow IDs
+```bash
+# ID workflow из n8n (берется из URL после импорта)
+WF_01_WORKFLOW_ID=your_wf01_id_here
+WF_02_WORKFLOW_ID=your_wf02_id_here
+WF_03_WORKFLOW_ID=your_wf03_id_here
+WF_04_WORKFLOW_ID=your_wf04_id_here
+WF_05_WORKFLOW_ID=your_wf05_id_here
+WF_06_WORKFLOW_ID=your_wf06_id_here
+
+# Google Sheets
+GOOGLE_SHEET_ID=your_google_sheet_id_here
+
+# Telegram Admin
+TELEGRAM_ADMIN_CHAT_ID=your_telegram_chat_id_here
+```
 
 ## Что осталось в переменных окружения
 
