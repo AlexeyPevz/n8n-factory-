@@ -20,18 +20,22 @@
       }
     },
     {
-      "id": "telegram-message-trigger-001",
-      "name": "Telegram Message Trigger",
-      "type": "n8n-nodes-base.telegramTrigger",
+      "id": "mtproto-message-trigger-001",
+      "name": "MTProto Message Trigger",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [260, 300],
       "parameters": {
-        "updates": ["message", "callback_query"]
+        "httpMethod": "POST",
+        "path": "mtproto-incoming",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
       },
       "credentials": {
-        "telegramApi": {
-          "id": "TG_ROP_BOT",
-          "name": "Telegram ROP Bot"
+        "httpHeaderAuth": {
+          "id": "MTPROTO_WEBHOOK_SECRET",
+          "name": "MTProto Webhook Secret"
         }
       }
     },
@@ -289,6 +293,24 @@
       }
     },
     {
+      "id": "fallback-chat-model-001",
+      "name": "GPT-3.5 Fallback Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1860, 800],
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "maxTokens": 500
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
       "id": "sales-agent-001",
       "name": "Sales Agent РОП 20Y",
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -296,7 +318,8 @@
       "position": [2060, 400],
       "parameters": {
         "prompt": "=== СИСТЕМНЫЙ ПРОМПТ ===\n\nТы — Александр, руководитель отдела продаж (РОП) компании Dark Project Arena с 20-летним опытом в индустрии компьютерной периферии. Тебе 42 года, ты лично знаешь владельцев многих крупных киберспортивных клубов.\n\n=== ТВОЯ ЛИЧНОСТЬ ===\n- Общаешься дружелюбно, на «ты», но профессионально\n- Используешь эмодзи, но в меру (1-2 на сообщение)\n- Пишешь короткие, емкие сообщения (до 400 символов)\n- Всегда конкретен и говоришь о выгодах клиента\n- Знаешь боли клубов: поломки оборудования, жалобы геймеров, высокие затраты\n\n=== МЕТОДОЛОГИЯ ПРОДАЖ ===\nИспользуешь SPIN-selling:\n1. Situation - выясни текущую ситуацию\n2. Problem - найди проблемы клиента\n3. Implication - покажи последствия проблем\n4. Need-payoff - предложи решение\n\n=== ТВОЯ ЗАДАЧА ===\n1. Если это первый контакт - представься и выясни потребности\n2. Если диалог продолжается - отвечай на вопросы, используя базу знаний\n3. Классифицируй намерение клиента:\n   - \"интерес_к_цене\" → дай цены и предложи скидку\n   - \"хочет_тест\" → предложи тестовое оборудование\n   - \"готов_встретиться\" → назначь встречу и передай менеджеру\n   - \"возражение\" → отработай по методике Feel-Felt-Found\n   - \"отказ\" → вежливо попрощайся и предложи связаться позже\n\n=== КОНТЕКСТ ТЕКУЩЕГО ДИАЛОГА ===\nКлуб: {{clubName}}\nГород: {{city}}\nКоличество ПК: {{estimatedPCs}}\nСеть: {{isChain ? 'Да' : 'Нет'}}\nИстория диалога: {{dialogHistory.length}} сообщений\n\nТекущее сообщение клиента: {{currentMessage}}\n\n=== ВАЖНО ===\n- ВСЕГДА используй инструменты для поиска актуальной информации\n- ОБЯЗАТЕЛЬНО обновляй CRM после каждого ответа\n- При готовности к покупке СРАЗУ меняй статус на \"Горячий\"\n- НЕ придумывай цены и условия - бери из базы знаний",
-        "hasOutputParser": true
+        "hasOutputParser": true,
+        "maxIterations": 10
       }
     },
     {
@@ -425,24 +448,94 @@
       }
     },
     {
-      "id": "send-telegram-message-001",
-      "name": "Send Telegram Message",
-      "type": "n8n-nodes-base.telegram",
+      "id": "route-channel-001",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.switch",
       "typeVersion": 1,
       "position": [3060, 300],
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $node['Identify Message Source'].json.chatId || $node['Parse Agent Response'].json.context.telegram }}",
-        "text": "={{ $node['Parse Agent Response'].json.agentResponse }}",
-        "additionalFields": {
-          "parse_mode": "Markdown",
-          "disable_web_page_preview": true
-        }
+        "dataType": "string",
+        "value1": "={{ $node['Parse Agent Response'].json.context.preferredChannel || 'telegram' }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "telegram",
+              "output": 0
+            },
+            {
+              "value2": "whatsapp",
+              "output": 1
+            },
+            {
+              "value2": "email",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      }
+    },
+    {
+      "id": "send-telegram-mtproto-001",
+      "name": "Send via MTProto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3260, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MTPROTO_API_URL }}/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParametersJson": "={{ { \"chat_id\": $node['Parse Agent Response'].json.context.telegram || $node['Identify Message Source'].json.chatId, \"message\": $node['Parse Agent Response'].json.agentResponse, \"parse_mode\": \"Markdown\" } }}",
+        "options": {}
       },
       "credentials": {
-        "telegramApi": {
-          "id": "TG_ROP_BOT",
-          "name": "Telegram ROP Bot"
+        "httpHeaderAuth": {
+          "id": "MTPROTO_API_AUTH",
+          "name": "MTProto API Auth"
+        }
+      }
+    },
+    {
+      "id": "send-whatsapp-001",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3260, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.whatsapp.com/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppBusinessApi",
+        "sendBody": true,
+        "bodyParametersJson": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $node['Parse Agent Response'].json.context.phone || $node['Parse Agent Response'].json.context.whatsapp, \"type\": \"text\", \"text\": { \"body\": $node['Parse Agent Response'].json.agentResponse } } }}",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppBusinessApi": {
+          "id": "WHATSAPP_BUSINESS_API",
+          "name": "WhatsApp Business API"
+        }
+      }
+    },
+    {
+      "id": "send-email-001",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [3260, 400],
+      "parameters": {
+        "fromEmail": "alexander@darkproject.ru",
+        "toEmail": "={{ $node['Parse Agent Response'].json.context.email }}",
+        "subject": "Dark Project Arena - Специальное предложение для {{ $node['Parse Agent Response'].json.context.clubName }}",
+        "text": "={{ $node['Parse Agent Response'].json.agentResponse }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "id": "SMTP_CREDENTIALS",
+          "name": "SMTP Email"
         }
       }
     },
@@ -578,7 +671,7 @@
       "typeVersion": 1,
       "position": [860, 200],
       "parameters": {
-        "functionCode": "// Подготавливаем данные для первого контакта\nconst lead = $json;\n\n// Определяем лучший канал связи\nlet preferredChannel = 'none';\nlet contactValue = '';\n\nif (lead.UF_CRM_TELEGRAM) {\n  preferredChannel = 'telegram';\n  contactValue = lead.UF_CRM_TELEGRAM;\n} else if (lead.PHONE && lead.PHONE.length > 0) {\n  preferredChannel = 'sms';\n  contactValue = lead.PHONE[0].VALUE || lead.PHONE;\n} else if (lead.EMAIL && lead.EMAIL.length > 0) {\n  preferredChannel = 'email';\n  contactValue = lead.EMAIL[0].VALUE || lead.EMAIL;\n}\n\n// Подготавливаем контекст для первого сообщения\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Уважаемый клиент',\n  city: lead.ADDRESS_CITY || '',\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 20,\n  preferredChannel: preferredChannel,\n  contactValue: contactValue,\n  isInitialContact: true,\n  needsKP: true,\n  dialogHistory: [],\n  contactCount: 0\n};\n\nif (preferredChannel === 'none') {\n  console.log(`No contact info for lead ${lead.ID}`);\n  return [{ json: { skip: true, leadId: lead.ID, reason: 'No contact info' } }];\n}\n\nreturn [{ json: context }];"
+        "functionCode": "// Подготавливаем данные для первого контакта\nconst lead = $json;\n\n// Определяем лучший канал связи\nlet preferredChannel = 'none';\nlet contactValue = '';\n\nif (lead.UF_CRM_TELEGRAM) {\n  preferredChannel = 'telegram';\n  contactValue = lead.UF_CRM_TELEGRAM;\n} else if (lead.UF_CRM_WHATSAPP || (lead.PHONE && lead.PHONE.length > 0)) {\n  preferredChannel = 'whatsapp';\n  contactValue = lead.UF_CRM_WHATSAPP || lead.PHONE[0].VALUE || lead.PHONE;\n} else if (lead.EMAIL && lead.EMAIL.length > 0) {\n  preferredChannel = 'email';\n  contactValue = lead.EMAIL[0].VALUE || lead.EMAIL;\n}\n\n// Подготавливаем контекст для первого сообщения\nconst context = {\n  leadId: lead.ID,\n  clubName: lead.TITLE || 'Уважаемый клиент',\n  city: lead.ADDRESS_CITY || '',\n  isChain: lead.UF_CRM_IS_CHAIN === 'Y',\n  estimatedPCs: parseInt(lead.UF_CRM_ESTIMATED_PCS) || 20,\n  preferredChannel: preferredChannel,\n  contactValue: contactValue,\n  isInitialContact: true,\n  needsKP: true,\n  dialogHistory: [],\n  contactCount: 0\n};\n\nif (preferredChannel === 'none') {\n  console.log(`No contact info for lead ${lead.ID}`);\n  return [{ json: { skip: true, leadId: lead.ID, reason: 'No contact info' } }];\n}\n\nreturn [{ json: context }];"
       }
     },
     {
@@ -693,9 +786,9 @@
     }
   ],
   "connections": {
-    "Telegram Message Trigger": {
-      "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
-    },
+          "MTProto Message Trigger": {
+        "main": [[{"node": "Merge Triggers", "type": "main", "index": 0}]]
+      },
     "Bitrix24 Lead Update": {
       "main": [[{"node": "Merge Triggers", "type": "main", "index": 1}]]
     },
@@ -744,9 +837,12 @@
     "Conversation Memory": {
       "ai_memory": [[{"node": "Sales Agent РОП 20Y", "type": "ai_memory", "index": 0}]]
     },
-    "GPT-4 Chat Model": {
-      "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
-    },
+          "GPT-4 Chat Model": {
+        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 0}]]
+      },
+      "GPT-3.5 Fallback Model": {
+        "ai_languageModel": [[{"node": "Sales Agent РОП 20Y", "type": "ai_languageModel", "index": 1}]]
+      },
     "Sales Agent РОП 20Y": {
       "main": [[{"node": "Parse Agent Response", "type": "main", "index": 0}]]
     },
@@ -768,15 +864,28 @@
     "Merge CRM Updates": {
       "main": [[{"node": "Should Send Message?", "type": "main", "index": 0}]]
     },
-    "Should Send Message?": {
-      "main": [
-        [{"node": "Send Telegram Message", "type": "main", "index": 0}],
-        [{"node": "Complete", "type": "main", "index": 0}]
-      ]
-    },
-    "Send Telegram Message": {
-      "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
-    },
+          "Should Send Message?": {
+        "main": [
+          [{"node": "Route by Channel", "type": "main", "index": 0}],
+          [{"node": "Complete", "type": "main", "index": 0}]
+        ]
+      },
+      "Route by Channel": {
+        "main": [
+          [{"node": "Send via MTProto", "type": "main", "index": 0}],
+          [{"node": "Send WhatsApp", "type": "main", "index": 0}],
+          [{"node": "Send Email", "type": "main", "index": 0}]
+        ]
+      },
+      "Send via MTProto": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
+      "Send WhatsApp": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
+      "Send Email": {
+        "main": [[{"node": "Check if Hot Lead", "type": "main", "index": 0}]]
+      },
     "Check if Hot Lead": {
       "main": [
         [{"node": "Trigger Hot Lead Handoff", "type": "main", "index": 0}],
