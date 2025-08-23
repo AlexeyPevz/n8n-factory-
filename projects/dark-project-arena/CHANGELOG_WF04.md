@@ -1,5 +1,31 @@
 # Changelog for WF-04 Sales Nurture Agent
 
+## Version 2.2.0 (v011) - Fixed to use Tools Agent per n8n documentation
+
+### Problem
+- conversationalAgent was removed from n8n in February 2025
+- Agent configuration didn't match n8n documentation
+- Parameter names were incorrect (prompt vs text)
+
+### Changes Made
+1. **Changed agent type**: 
+   - From: `conversationalAgent` (deprecated)
+   - To: `toolsAgent` (recommended)
+
+2. **Fixed parameter names**:
+   - Changed `prompt` to `text` (correct parameter name)
+   - Moved `systemMessage` into `options` object
+
+3. **Maintained all functionality**:
+   - Dynamic prompt for initial contacts vs replies
+   - Full system prompt with SPIN methodology
+   - All tools connections remain the same
+
+### Result
+- Agent now uses the correct n8n API
+- Compatible with latest n8n version
+- Follows documentation standards
+
 ## Version 2.1.0 (v010) - Fixed "prompt parameter required" error
 
 ### Problem

@@ -1153,8 +1153,8 @@
   "id": "wf-04-sales-nurture-agent",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "description": "AI Agent-based sales nurturing with full dialog management, intent classification, and CRM integration - Fixed prompt parameter",
-    "version": "2.1.0"
+    "description": "AI Agent-based sales nurturing with full dialog management, intent classification, and CRM integration - Fixed to use Tools Agent",
+    "version": "2.2.0"
   },
   "tags": [
     {
