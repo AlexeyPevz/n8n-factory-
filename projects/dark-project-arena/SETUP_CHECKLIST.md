@@ -173,7 +173,7 @@ TELEGRAM_ADMIN_CHAT_ID=-1001234567890
 # API Keys (добавьте свои)
 YANDEX_MAPS_API_KEY=your_key_here
 TWOGIS_API_KEY=your_key_here
-# ... остальные ключи из ENVIRONMENT_VARIABLES.md
+# ... остальные ключи из .env.example
 ```
 
 ### Перезапустите n8n:
