@@ -745,6 +745,14 @@
               "value": "0"
             },
             {
+              "name": "order[UF_CRM_PRIORITY]",
+              "value": "DESC"
+            },
+            {
+              "name": "order[UF_CRM_ESTIMATED_PCS]",
+              "value": "DESC"
+            },
+            {
               "name": "select[]",
               "value": "ID"
             },
@@ -775,6 +783,10 @@
             {
               "name": "select[]",
               "value": "UF_CRM_ESTIMATED_PCS"
+            },
+            {
+              "name": "select[]",
+              "value": "UF_CRM_PRIORITY"
             }
           ]
         },
