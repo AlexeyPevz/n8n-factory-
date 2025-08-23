@@ -597,7 +597,7 @@
       "id": "send-whatsapp-001",
       "name": "Send WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [3260, 300],
       "parameters": {
         "method": "POST",
@@ -606,7 +606,13 @@
         "nodeCredentialType": "whatsAppBusinessApi",
         "sendBody": true,
         "bodyParametersJson": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $node['Parse Agent Response'].json.context.phone || $node['Parse Agent Response'].json.context.whatsapp, \"type\": \"text\", \"text\": { \"body\": $node['Parse Agent Response'].json.agentResponse } } }}",
-        "options": {}
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 2000
+          }
+        }
       },
       "credentials": {
         "whatsAppBusinessApi": {
