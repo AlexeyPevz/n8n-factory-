@@ -78,7 +78,14 @@ Google Sheets            # Внешнее управление данными
 
 ## 📚 Документация
 
+### 🆕 Для начинающих:
+- [ENV_SETUP_GUIDE_FOR_BEGINNERS.md](./ENV_SETUP_GUIDE_FOR_BEGINNERS.md) - Пошаговая инструкция по настройке переменных окружения
+- [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - Чек-лист быстрого старта с примерами
+- [DOCUMENTATION_STRUCTURE.md](./DOCUMENTATION_STRUCTURE.md) - Структура документации и что где искать
+
+### Основная документация:
 - [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Переменные окружения (только секреты)
+- [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md) - Настройка Google Sheets
 - [MTPROTO_SETUP.md](./MTPROTO_SETUP.md) - Настройка Telegram userbot
 - [WF-04-AGENT-DOCUMENTATION.md](./WF-04-AGENT-DOCUMENTATION.md) - Детали AI Agent
 - [BITRIX24_HTTP_GUIDE.md](./BITRIX24_HTTP_GUIDE.md) - Руководство по HTTP Request для Bitrix24
