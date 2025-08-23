@@ -84,7 +84,7 @@
       "typeVersion": 1,
       "position": [660, 400],
       "parameters": {
-        "functionCode": "// Определяем источник и контекст\nlet messageData = {};\n\n// Telegram сообщение\nif ($json.message) {\n  const msg = $json.message;\n  messageData = {\n    source: 'telegram',\n    chatId: msg.chat.id,\n    userId: msg.from.id,\n    userName: msg.from.first_name || 'Клиент',\n    text: msg.text || '',\n    messageId: msg.message_id,\n    isReply: true\n  };\n}\n// Bitrix24 webhook (новый лид или обновление)\nelse if ($json.leadId || $json.LEAD_ID) {\n  messageData = {\n    source: 'bitrix24',\n    leadId: $json.leadId || $json.LEAD_ID,\n    status: $json.STATUS_ID || 'NEW',\n    phone: $json.PHONE || '',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n// Manual trigger для тестирования\nelse {\n  messageData = {\n    source: 'manual',\n    leadId: $json.leadId || '12345',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n\nconsole.log('Message source identified:', messageData.source);\n\nreturn [{ json: messageData }];"
+        "functionCode": "// Валидация и определение источника\nlet messageData = {};\n\n// Валидация входных данных\nif (!$json || Object.keys($json).length === 0) {\n  throw new Error('Empty webhook payload received');\n}\n\n// Telegram сообщение\nif ($json.message) {\n  const msg = $json.message;\n  \n  // Валидация Telegram данных\n  if (!msg.chat || !msg.chat.id) {\n    throw new Error('Invalid Telegram message: missing chat.id');\n  }\n  if (!msg.from || !msg.from.id) {\n    throw new Error('Invalid Telegram message: missing from.id');\n  }\n  \n  messageData = {\n    source: 'telegram',\n    chatId: msg.chat.id,\n    userId: msg.from.id,\n    userName: msg.from.first_name || 'Клиент',\n    text: msg.text || '',\n    messageId: msg.message_id,\n    isReply: true\n  };\n}\n// Bitrix24 webhook (новый лид или обновление)\nelse if ($json.leadId || $json.LEAD_ID) {\n  const leadId = $json.leadId || $json.LEAD_ID;\n  \n  // Валидация Bitrix24 данных\n  if (!leadId || leadId.toString().trim() === '') {\n    throw new Error('Invalid Bitrix24 webhook: empty leadId');\n  }\n  \n  messageData = {\n    source: 'bitrix24',\n    leadId: leadId,\n    status: $json.STATUS_ID || 'NEW',\n    phone: $json.PHONE || '',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n// Manual trigger для тестирования\nelse if ($execution.mode === 'manual') {\n  messageData = {\n    source: 'manual',\n    leadId: $json.leadId || '12345',\n    isReply: false,\n    needsInitialContact: true\n  };\n}\n// Неизвестный источник\nelse {\n  throw new Error('Unknown webhook source. Expected: message (Telegram) or leadId (Bitrix24)');\n}\n\n// Дополнительная валидация\nif (messageData.source === 'telegram' && !messageData.text && !messageData.messageId) {\n  throw new Error('Telegram message without text or messageId');\n}\n\nconsole.log('Message source identified:', messageData.source);\n\nreturn [{ json: messageData }];"
       }
     },
     {
@@ -569,7 +569,7 @@
       "id": "send-telegram-mtproto-001",
       "name": "Send via MTProto",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [3260, 200],
       "parameters": {
         "method": "POST",
@@ -578,7 +578,13 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "bodyParametersJson": "={{ { \"chat_id\": $node['Parse Agent Response'].json.context.telegram || $node['Identify Message Source'].json.chatId, \"message\": $node['Parse Agent Response'].json.agentResponse, \"parse_mode\": \"Markdown\" } }}",
-        "options": {}
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 2000
+          }
+        }
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -591,7 +597,7 @@
       "id": "send-whatsapp-001",
       "name": "Send WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [3260, 300],
       "parameters": {
         "method": "POST",
@@ -600,7 +606,13 @@
         "nodeCredentialType": "whatsAppBusinessApi",
         "sendBody": true,
         "bodyParametersJson": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $node['Parse Agent Response'].json.context.phone || $node['Parse Agent Response'].json.context.whatsapp, \"type\": \"text\", \"text\": { \"body\": $node['Parse Agent Response'].json.agentResponse } } }}",
-        "options": {}
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 2000
+          }
+        }
       },
       "credentials": {
         "whatsAppBusinessApi": {
@@ -707,7 +719,7 @@
         "key": "errors:sales_nurture_agent",
         "value": "={{ JSON.stringify($json) }}",
         "expire": true,
-        "ttl": 86400
+        "ttl": "={{ parseInt($env.REDIS_CACHE_TTL) || 86400 }}"
       },
       "credentials": {
         "redis": {
@@ -858,7 +870,7 @@
       "typeVersion": 1,
       "position": [1160, 100],
       "parameters": {
-        "functionCode": "// Проверяем рабочее время\nconst now = new Date();\nconst moscowOffset = 3; // UTC+3\nconst moscowHour = (now.getUTCHours() + moscowOffset) % 24;\nconst dayOfWeek = now.getUTCDay();\n\n// Проверяем: понедельник-пятница (1-5), 9:00-18:00 по Москве\nconst isWorkingHours = dayOfWeek >= 1 && dayOfWeek <= 5 && moscowHour >= 9 && moscowHour < 18;\n\nif (!isWorkingHours) {\n  console.log(`Не рабочее время: день ${dayOfWeek}, час ${moscowHour} (МСК)`);\n  return [{ \n    json: { \n      ...($json),\n      skipReason: 'outside_working_hours',\n      shouldWait: true,\n      moscowHour: moscowHour,\n      dayOfWeek: dayOfWeek\n    } \n  }];\n}\n\nreturn [{ json: $json }];"
+        "functionCode": "// Проверяем рабочее время с учетом настроек\nconst now = new Date();\nconst moscowOffset = 3; // UTC+3\nconst moscowHour = (now.getUTCHours() + moscowOffset) % 24;\nconst dayOfWeek = now.getUTCDay();\n\n// Получаем настройки из переменных окружения\nconst workHoursStart = parseInt($env.WORK_HOURS_START) || 9;\nconst workHoursEnd = parseInt($env.WORK_HOURS_END) || 18;\nconst workDaysStart = parseInt($env.WORK_DAYS_START) || 1;\nconst workDaysEnd = parseInt($env.WORK_DAYS_END) || 5;\n\n// Проверяем рабочее время\nconst isWorkingHours = \n  dayOfWeek >= workDaysStart && \n  dayOfWeek <= workDaysEnd && \n  moscowHour >= workHoursStart && \n  moscowHour < workHoursEnd;\n\nif (!isWorkingHours) {\n  console.log(`Не рабочее время: день ${dayOfWeek}, час ${moscowHour} (МСК)`);\n  console.log(`Рабочие часы: ${workHoursStart}:00 - ${workHoursEnd}:00, дни: ${workDaysStart}-${workDaysEnd}`);\n  return [{ \n    json: { \n      ...($json),\n      skipReason: 'outside_working_hours',\n      shouldWait: true,\n      moscowHour: moscowHour,\n      dayOfWeek: dayOfWeek\n    } \n  }];\n}\n\nreturn [{ json: $json }];"
       }
     },
     {

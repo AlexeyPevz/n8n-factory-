@@ -78,11 +78,20 @@ Google Sheets            # Внешнее управление данными
 
 ## 📚 Документация
 
-- [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Переменные окружения (только секреты)
-- [MTPROTO_SETUP.md](./MTPROTO_SETUP.md) - Настройка Telegram userbot
-- [WF-04-AGENT-DOCUMENTATION.md](./WF-04-AGENT-DOCUMENTATION.md) - Детали AI Agent
-- [BITRIX24_HTTP_GUIDE.md](./BITRIX24_HTTP_GUIDE.md) - Руководство по HTTP Request для Bitrix24
-- [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md) - Настройка Google Sheets
+### 🆕 Начните отсюда:
+1. [ENV_SETUP_GUIDE_FOR_BEGINNERS.md](./ENV_SETUP_GUIDE_FOR_BEGINNERS.md) - Подробная инструкция по настройке переменных (для новичков)
+2. [SETUP_CHECKLIST.md](./SETUP_CHECKLIST.md) - Чек-лист быстрого старта с примерами команд
+3. [DOCUMENTATION_STRUCTURE.md](./DOCUMENTATION_STRUCTURE.md) - Карта документации проекта
+
+### 🔧 Настройка интеграций:
+- [GOOGLE_SHEETS_SETUP_GUIDE.md](./GOOGLE_SHEETS_SETUP_GUIDE.md) - Централизованное управление через Google Sheets
+- [BITRIX24_HTTP_GUIDE.md](./BITRIX24_HTTP_GUIDE.md) - Интеграция с Bitrix24 CRM
+- [MTPROTO_SETUP.md](./MTPROTO_SETUP.md) - Настройка Telegram userbot для отправки сообщений
+
+### 📖 Техническая документация:
+- [WF-04-AGENT-DOCUMENTATION.md](./WF-04-AGENT-DOCUMENTATION.md) - Архитектура и логика AI агента
+- [LEAD_PRIORITIZATION_STRATEGY.md](./LEAD_PRIORITIZATION_STRATEGY.md) - Стратегия приоритизации лидов
+- [SOCIAL_MEDIA_SEARCH_STRATEGY.md](./SOCIAL_MEDIA_SEARCH_STRATEGY.md) - Поиск клиентов в соцсетях
 
 ## ⚡ Быстрый старт
 
@@ -118,7 +127,7 @@ docker-compose up -d mtproto
 
 3. Настройте переменные окружения:
    - Скопируйте ID workflow из URL после импорта
-   - Добавьте в `.env` файл все ID (см. ENVIRONMENT_VARIABLES.md)
+   - Добавьте в `.env` файл все ID (см. ENV_SETUP_GUIDE_FOR_BEGINNERS.md)
    - Перезапустите n8n
 
 4. Настройте credentials:
