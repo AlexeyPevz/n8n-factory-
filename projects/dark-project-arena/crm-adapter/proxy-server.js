@@ -5,6 +5,7 @@
 
 const express = require('express');
 const CRMAdapter = require('./crm-adapter');
+const DPCRMAdapter = require('./dp-crm-adapter');
 const morgan = require('morgan');
 const cors = require('cors');
 
@@ -20,8 +21,9 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Initialize CRM adapter
-const adapter = new CRMAdapter(
+// Initialize CRM adapter based on CRM_TYPE
+const AdapterClass = process.env.CRM_TYPE === 'DP_CRM' ? DPCRMAdapter : CRMAdapter;
+const adapter = new AdapterClass(
   process.env.CUSTOM_CRM_URL || 'http://localhost:8080',
   process.env.CUSTOM_CRM_API_KEY || 'your-api-key'
 );
