@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -97,14 +100,53 @@ jobs:
       - name: Sanitize examples (remove tokens)
         run: |
           set -e
-          if [ -d "./examples" ]; then
-            files=$(grep -RIl 'apify_api_' ./examples || true)
-            if [ -n "$files" ]; then
-              echo "Sanitizing Apify tokens in examples:"
-              echo "$files"
-              echo "$files" | xargs -r sed -i -E 's/apify_api_[A-Za-z0-9]+/<REDACTED_APIFY_TOKEN>/g'
-            fi
-          fi
+          sanitize_dir() {
+            target_dir="$1"
+            [ -d "$target_dir" ] || return 0
+
+            # Apify tokens
+            files=$(grep -RIl 'apify_api_' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/apify_api_[A-Za-z0-9]+/<REDACTED_APIFY_TOKEN>/g'
+
+            # Slack tokens
+            files=$(grep -RIlE 'xox[abprs]-[A-Za-z0-9-]+' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/xox[abprs]-[A-Za-z0-9-]+/<REDACTED_SLACK_TOKEN>/g'
+
+            # Telegram bot tokens
+            files=$(grep -RIlE '[0-9]{9,}:[A-Za-z0-9_-]{35,}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/[0-9]{9,}:[A-Za-z0-9_-]{35,}/<REDACTED_TELEGRAM_TOKEN>/g'
+
+            # Discord webhooks
+            files=$(grep -RIlE 'https://discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's#https://discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+#<REDACTED_DISCORD_WEBHOOK>#g'
+
+            # OpenAI keys
+            files=$(grep -RIlE 'sk-[A-Za-z0-9_-]{20,}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/sk-[A-Za-z0-9_-]{20,}/<REDACTED_OPENAI_KEY>/g'
+
+            # GitHub tokens
+            files=$(grep -RIlE '(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}/<REDACTED_GITHUB_TOKEN>/g'
+
+            # Google API keys
+            files=$(grep -RIlE 'AIza[0-9A-Za-z\-_]{35}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/AIza[0-9A-Za-z\-_]{35}/<REDACTED_GOOGLE_API_KEY>/g'
+
+            # Notion tokens
+            files=$(grep -RIlE 'secret_[A-Za-z0-9]{43,}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/secret_[A-Za-z0-9]{43,}/<REDACTED_NOTION_TOKEN>/g'
+
+            # Hugging Face tokens
+            files=$(grep -RIlE 'hf_[A-Za-z0-9]{38,}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/hf_[A-Za-z0-9]{38,}/<REDACTED_HF_TOKEN>/g'
+
+            # AWS access keys
+            files=$(grep -RIlE 'AKIA[0-9A-Z]{16}' "$target_dir" || true)
+            [ -n "$files" ] && echo "$files" | xargs -r sed -i -E 's/AKIA[0-9A-Z]{16}/<REDACTED_AWS_ACCESS_KEY>/g'
+          }
+
+          sanitize_dir ./examples
+          sanitize_dir ./docs
 
       # 7. Создаем Pull Request с изменениями
       - name: Create Pull Request
