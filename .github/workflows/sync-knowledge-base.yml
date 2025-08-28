@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       # 1. Официальная документация n8n
       - name: Sync n8n Official Docs
@@ -148,8 +149,31 @@ jobs:
           sanitize_dir ./examples
           sanitize_dir ./docs
 
-      # 7. Создаем Pull Request с изменениями
+      # 7. Пытаемся запушить изменения напрямую в main
+      - name: Auto-commit updates to main
+        id: autopush
+        continue-on-error: true
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git commit -m "🤖 Auto-sync: n8n knowledge base updates"
+          if git push origin HEAD:main; then
+            echo "pushed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # 8. Создаем Pull Request, если прямой пуш не получился
       - name: Create Pull Request
+        id: cpr
+        if: steps.autopush.outputs.pushed != 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -162,3 +186,12 @@ jobs:
             - Sources: n8n-io/n8n-docs, Zie619/n8n-workflows, wassupjay/n8n-free-templates, Synaptiv-AI/awesome-n8n, ProfSynapse/n8n-automations.
           labels: automated, sync
           delete-branch: true
+
+      # 9. Включаем авто-merge для PR (если репозиторий это позволяет)
+      - name: Enable PR auto-merge
+        if: steps.autopush.outputs.pushed != 'true' && steps.cpr.outputs.pull-request-number
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
